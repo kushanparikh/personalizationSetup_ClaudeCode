@@ -11,6 +11,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"runtime/debug"
 
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/hookrun"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/logx"
@@ -59,7 +60,13 @@ func runHook(args []string) {
 	hookrun.Run(sub, args, os.Stdin, os.Stdout, hookrun.DefaultDeps())
 }
 
-func run(args []string) int {
+func run(args []string) (code int) {
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Default().Error("command panicked", "args", args, "panic", r, "stack", string(debug.Stack()))
+			code = fail(fmt.Errorf("internal error: %v", r))
+		}
+	}()
 	if paths.Home() == "" {
 		return fail(errors.New("can't find your home folder"))
 	}

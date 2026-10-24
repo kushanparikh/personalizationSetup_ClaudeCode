@@ -30,8 +30,8 @@ func Script(bin string) string { return strings.Replace(script, "@BIN@", bin, 1)
 // if the content or mode differs, and reports whether it changed anything.
 // bin must not contain characters that are special inside sh double quotes.
 func Install(path, bin string) (changed bool, err error) {
-	if bin == "" || strings.ContainsAny(bin, "\"$`\\") {
-		return false, fmt.Errorf("unsafe app path for the launcher: %q", bin)
+	if err := checkBin(bin); err != nil {
+		return false, err
 	}
 	want := []byte(Script(bin))
 	cur, err := os.ReadFile(path)
@@ -79,4 +79,23 @@ func Install(path, bin string) (changed bool, err error) {
 		return false, err
 	}
 	return true, nil
+}
+
+// EnsureInstalled writes the launcher only if nothing exists at path, so a
+// launcher pointed elsewhere (e.g. a development build) is kept.
+func EnsureInstalled(path, bin string) (changed bool, err error) {
+	if err := checkBin(bin); err != nil {
+		return false, err
+	}
+	if _, err := os.Lstat(path); !errors.Is(err, fs.ErrNotExist) {
+		return false, err
+	}
+	return Install(path, bin)
+}
+
+func checkBin(bin string) error {
+	if bin == "" || strings.ContainsAny(bin, "\"$`\\") {
+		return fmt.Errorf("unsafe app path for the launcher: %q", bin)
+	}
+	return nil
 }

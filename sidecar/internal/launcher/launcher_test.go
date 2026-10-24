@@ -87,3 +87,27 @@ func TestLauncherExecsBin(t *testing.T) {
 		t.Fatalf("output = %q", out)
 	}
 }
+
+func TestEnsureInstalledKeepsExisting(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "bin", "pcs-hook")
+	changed, err := EnsureInstalled(p, "/app/pcs")
+	if err != nil || !changed {
+		t.Fatalf("missing: changed=%v err=%v", changed, err)
+	}
+	if fi, err := os.Stat(p); err != nil || fi.Mode().Perm() != 0o755 {
+		t.Fatalf("stat: %v", err)
+	}
+	if _, err := Install(p, "/dev/pcs"); err != nil {
+		t.Fatal(err)
+	}
+	changed, err = EnsureInstalled(p, "/app/pcs")
+	if err != nil || changed {
+		t.Fatalf("existing: changed=%v err=%v", changed, err)
+	}
+	if b, _ := os.ReadFile(p); !strings.Contains(string(b), `BIN="/dev/pcs"`) {
+		t.Fatalf("existing launcher overwritten:\n%s", b)
+	}
+	if _, err := EnsureInstalled(filepath.Join(t.TempDir(), "x"), `/a"b`); err == nil {
+		t.Fatal("unsafe path accepted")
+	}
+}

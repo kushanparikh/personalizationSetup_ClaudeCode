@@ -59,8 +59,20 @@ func parseStatus(s string) (perms.Status, error) {
 	return "", fmt.Errorf("invalid --notifications status %q", s)
 }
 
+// installLauncher always (re)writes the launcher for bin; used by install-launcher.
 func installLauncher(bin string) (bool, error) {
-	changed, err := launcher.Install(paths.LauncherPath(), bin)
+	return logLauncher(bin, launcher.Install)
+}
+
+// ensureLauncher writes the launcher only when it's missing, so write commands
+// never clobber a launcher set up with install-launcher --bin.
+func ensureLauncher() error {
+	_, err := logLauncher(paths.AppBinary(), launcher.EnsureInstalled)
+	return err
+}
+
+func logLauncher(bin string, install func(path, bin string) (bool, error)) (bool, error) {
+	changed, err := install(paths.LauncherPath(), bin)
 	if err != nil {
 		return false, fmt.Errorf("couldn't install the hook launcher: %w", err)
 	}
@@ -164,7 +176,7 @@ func cmdApply(args []string) (any, error) {
 	if err := hooktypes.Validate(d.Type, a); err != nil {
 		return nil, err
 	}
-	if _, err := installLauncher(paths.AppBinary()); err != nil {
+	if err := ensureLauncher(); err != nil {
 		return nil, err
 	}
 	if err := setHook(d, a); err != nil {
@@ -181,7 +193,7 @@ func cmdEnable(args []string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := installLauncher(paths.AppBinary()); err != nil {
+	if err := ensureLauncher(); err != nil {
 		return nil, err
 	}
 	f, err := settings.Load(paths.SettingsPath())
@@ -206,7 +218,7 @@ func cmdDisable(args []string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := installLauncher(paths.AppBinary()); err != nil {
+	if err := ensureLauncher(); err != nil {
 		return nil, err
 	}
 	f, err := settings.Load(paths.SettingsPath())
@@ -230,7 +242,7 @@ func cmdRemove(args []string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	if _, err := installLauncher(paths.AppBinary()); err != nil {
+	if err := ensureLauncher(); err != nil {
 		return nil, err
 	}
 	f, err := settings.Load(paths.SettingsPath())

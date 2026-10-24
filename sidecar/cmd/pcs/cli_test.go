@@ -151,6 +151,9 @@ func (e *env) run(stdin string, args ...string) (string, int) {
 	} else if err != nil {
 		e.t.Fatalf("run pcs %v: %v", args, err)
 	}
+	if esc := "\\" + "u00"; strings.Contains(out.String(), esc+"26") || strings.Contains(out.String(), esc+"3c") || strings.Contains(out.String(), esc+"3e") {
+		e.t.Fatalf("pcs %v: HTML-escaped output: %s", args, out.String())
+	}
 	return out.String(), code
 }
 
@@ -436,5 +439,40 @@ func TestInstallLauncher(t *testing.T) {
 	want := `BIN="` + filepath.Join(e.home, "Applications", "Personalization Setup.app", "Contents", "MacOS", "pcs") + `"`
 	if err != nil || !strings.Contains(string(b), want) {
 		t.Fatalf("launcher: %v\n%s", err, b)
+	}
+}
+
+func TestWriteCommandsKeepExistingLauncher(t *testing.T) {
+	e := newEnv(t, userSettings)
+	e.ok("install-launcher", "--bin", "/x/pcs")
+	e.ok("apply", "--type", "finished", "--answers", `{"sound":"Glass","clickToFocus":true}`)
+	e.ok("disable", "--type", "finished")
+	b, err := os.ReadFile(filepath.Join(e.home, ".pcs", "bin", "pcs-hook"))
+	if err != nil || !strings.Contains(string(b), `BIN="/x/pcs"`) {
+		t.Fatalf("dev launcher overwritten: %v\n%s", err, b)
+	}
+	if res := e.ok("install-launcher"); res["changed"] != true {
+		t.Fatalf("install-launcher must always rewrite: %v", res)
+	}
+}
+
+func TestPanicBecomesError(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	commands["test-panic"] = func([]string) (any, error) { panic("boom") }
+	defer delete(commands, "test-panic")
+
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout := os.Stdout
+	os.Stdout = w
+	code := run([]string{"test-panic"})
+	os.Stdout = stdout
+	w.Close()
+	var out bytes.Buffer
+	out.ReadFrom(r)
+	if code != 1 || strings.TrimSpace(out.String()) != `{"error":"internal error: boom"}` {
+		t.Fatalf("code %d, out %q", code, out.String())
 	}
 }

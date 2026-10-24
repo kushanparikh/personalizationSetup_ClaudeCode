@@ -1,6 +1,7 @@
 package report
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -222,18 +223,20 @@ func TestJSONIsCamelCase(t *testing.T) {
 	}
 	setOwned(t, f, hooktypes.Finished, hooktypes.Answers{Sound: "Glass", ClickToFocus: true})
 	r := Build(f, nil, emptyStore(), map[perms.ID]perms.Status{perms.Notifications: perms.Granted})
-	b, err := json.Marshal(r)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(r); err != nil {
 		t.Fatal(err)
 	}
-	s := string(b)
+	s := buf.String()
 	for _, k := range []string{`"hooks":`, `"available":`, `"otherHooks":`, `"pending":`, `"settingsError":`, `"logPath":`,
 		`"needs":`, `"enabled":`, `"answers":`, `"id":"automation-terminal"`, `"settingsUrl":`, `"affects":["Finished working"]`, `"title":"Control Terminal"`} {
 		if !strings.Contains(s, k) {
 			t.Errorf("missing %s in %s", k, s)
 		}
 	}
-	if strings.Contains(s, `&`) {
-		t.Errorf("HTML-escaped output: %s", s)
+	if !strings.Contains(s, "Privacy & Security") || strings.Contains(s, "\\"+"u0026") {
+		t.Errorf("want a literal & in the output: %s", s)
 	}
 }
