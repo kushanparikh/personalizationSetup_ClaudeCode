@@ -47,3 +47,17 @@ func Lookup(id ID) Info {
 	}
 	return Info{ID: id}
 }
+
+// StatusFromOSStatus maps an AEDeterminePermissionToAutomateTarget result to a
+// Status. Anything unrecognised, including -600 (target app not running), is Unknown.
+func StatusFromOSStatus(code int) Status {
+	switch code {
+	case 0:
+		return Granted
+	case -1743:
+		return Denied
+	case -1744:
+		return NotAsked
+	}
+	return Unknown
+}
