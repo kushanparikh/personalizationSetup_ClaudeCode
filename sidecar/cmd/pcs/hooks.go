@@ -5,10 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/hooktypes"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/launcher"
@@ -169,7 +171,7 @@ func cmdApply(args []string) (any, error) {
 	}
 	a := d.Defaults
 	if *answersIn != "" {
-		if err := json.Unmarshal([]byte(*answersIn), &a); err != nil {
+		if err := decodeAnswers(*answersIn, &a); err != nil {
 			return nil, fmt.Errorf("invalid --answers: %w", err)
 		}
 	}
@@ -186,6 +188,20 @@ func cmdApply(args []string) (any, error) {
 	st.Hooks[d.Type] = a
 	saveState(st)
 	return buildReport(notif), nil
+}
+
+// decodeAnswers decodes one JSON object into a, rejecting unknown keys and
+// trailing data.
+func decodeAnswers(in string, a *hooktypes.Answers) error {
+	dec := json.NewDecoder(strings.NewReader(in))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(a); err != nil {
+		return err
+	}
+	if _, err := dec.Token(); err != io.EOF {
+		return errors.New("unexpected data after the answers object")
+	}
+	return nil
 }
 
 func cmdEnable(args []string) (any, error) {

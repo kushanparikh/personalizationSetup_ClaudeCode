@@ -504,3 +504,15 @@ func TestUninstallRemovesUnknownOwnedEntries(t *testing.T) {
 		t.Fatalf("settings:\n%s", e.settings())
 	}
 }
+
+func TestApplyRejectsUnknownAnswerKeys(t *testing.T) {
+	e := newEnv(t, userSettings)
+	msg := e.fail("apply", "--type", "finished", "--answers", `{"sound":"Glass","clickToFocus":true,"colour":"red"}`)
+	if !strings.Contains(msg, "invalid --answers") || !strings.Contains(msg, "colour") {
+		t.Fatalf("error = %q", msg)
+	}
+	e.fail("apply", "--type", "finished", "--answers", `{"sound":"Glass"} {}`)
+	if e.settings() != userSettings {
+		t.Fatalf("settings changed:\n%s", e.settings())
+	}
+}
