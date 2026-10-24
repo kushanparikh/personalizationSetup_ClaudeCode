@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -265,5 +266,54 @@ func TestSendLaunchErrorWrappedWhenStillDown(t *testing.T) {
 	err := c.Send(Event{V: 1, Kind: KindBanner}, true)
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+type tempErr struct{}
+
+func (tempErr) Error() string   { return "temp" }
+func (tempErr) Temporary() bool { return true }
+
+type fakeLn struct {
+	net.Listener
+	errs []error
+}
+
+func (f *fakeLn) Accept() (net.Conn, error) {
+	e := f.errs[0]
+	f.errs = f.errs[1:]
+	return nil, e
+}
+
+func TestAcceptLoopRetriesTemporaryThenSurfacesPermanent(t *testing.T) {
+	perm := errors.New("listener broke")
+	ln := &fakeLn{errs: []error{tempErr{}, tempErr{}, perm}}
+	err := acceptLoop(ln, make(chan struct{}), func(net.Conn) {})
+	if !errors.Is(err, perm) {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+func TestAcceptLoopStopIsNil(t *testing.T) {
+	stop := make(chan struct{})
+	close(stop)
+	ln := &fakeLn{errs: []error{errors.New("closed")}}
+	if err := acceptLoop(ln, stop, func(net.Conn) {}); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestSendLaunchBounded(t *testing.T) {
+	sock := filepath.Join(shortDir(t), "a.sock")
+	var wg sync.WaitGroup
+	wg.Add(1)
+	c := &Client{Socket: sock, DialTimeout: 100 * time.Millisecond, LaunchWait: 300 * time.Millisecond,
+		Launch: func() error { defer wg.Done(); time.Sleep(5 * time.Second); return nil }}
+	start := time.Now()
+	if err := c.Send(Event{V: 1, Kind: KindBanner}, true); err == nil {
+		t.Fatal("expected error")
+	}
+	if d := time.Since(start); d > 1200*time.Millisecond {
+		t.Fatalf("took %v", d)
 	}
 }

@@ -83,41 +83,56 @@ func DefaultClient() *Client {
 	return &Client{
 		Socket: paths.SocketPath(),
 		Launch: func() error {
-			return exec.Command("open", "-g", "-j", "-a", paths.AppPath()).Run()
+			cmd := exec.Command("open", "-g", "-j", "-a", paths.AppPath())
+			if err := cmd.Start(); err != nil {
+				return err
+			}
+			go cmd.Wait() // reap; do not block the caller
+			return nil
 		},
 		DialTimeout: 200 * time.Millisecond,
 		LaunchWait:  3 * time.Second,
 	}
 }
 
-func (c *Client) dial() (net.Conn, error) {
-	return net.DialTimeout("unix", c.Socket, c.DialTimeout)
+func (c *Client) dial(timeout time.Duration) (net.Conn, error) {
+	return net.DialTimeout("unix", c.Socket, timeout)
 }
 
 // Send delivers e as one JSON line. If the app is down and launchIfDown is
-// set, Launch is called once and the dial is retried until LaunchWait elapses.
+// set, Launch is called once (in the background, so a slow Launch cannot extend
+// the wait) and the dial is retried until LaunchWait, measured from before
+// Launch, elapses.
 func (c *Client) Send(e Event, launchIfDown bool) error {
-	conn, err := c.dial()
+	conn, err := c.dial(c.DialTimeout)
 	if err != nil {
 		if !launchIfDown {
 			return err
 		}
-		var launchErr error
-		if c.Launch != nil {
-			launchErr = c.Launch()
-		}
 		deadline := time.Now().Add(c.LaunchWait)
+		launched := make(chan error, 1)
+		go func() {
+			if c.Launch == nil {
+				launched <- nil
+				return
+			}
+			launched <- c.Launch()
+		}()
 		for {
-			if conn, err = c.dial(); err == nil {
+			if conn, err = c.dial(min(c.DialTimeout, max(time.Until(deadline), time.Millisecond))); err == nil {
 				break
 			}
 			if !time.Now().Before(deadline) {
-				if launchErr != nil {
-					return fmt.Errorf("launch failed: %w; dial failed: %w", launchErr, err)
+				select {
+				case launchErr := <-launched:
+					if launchErr != nil {
+						return fmt.Errorf("launch failed: %w; dial failed: %w", launchErr, err)
+					}
+				default:
 				}
 				return err
 			}
-			time.Sleep(redialEvery)
+			time.Sleep(min(redialEvery, max(time.Until(deadline), 0)))
 		}
 	}
 	defer conn.Close()
@@ -170,31 +185,62 @@ func Serve(socket string, out io.Writer, stop <-chan struct{}) error {
 	}
 
 	var wg sync.WaitGroup
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		<-stop
+		select {
+		case <-stop:
+		case <-done:
+		}
 		ln.Close()
 	}()
-	for {
-		conn, err := ln.Accept()
-		if err != nil {
-			select {
-			case <-stop:
-			default:
-				slog.Default().Error("ipc accept failed", "err", err)
-			}
-			break
-		}
+	err = acceptLoop(ln, stop, func(conn net.Conn) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			defer conn.Close()
 			handle(conn, emit)
 		}()
-	}
+	})
 	ln.Close()
 	wg.Wait()
 	os.Remove(socket)
-	return nil
+	return err
+}
+
+// acceptLoop accepts until stop closes (returns nil) or a permanent error
+// occurs (returned wrapped). Temporary errors are retried with backoff.
+func acceptLoop(ln net.Listener, stop <-chan struct{}, spawn func(net.Conn)) error {
+	var delay time.Duration
+	for {
+		conn, err := ln.Accept()
+		if err == nil {
+			delay = 0
+			spawn(conn)
+			continue
+		}
+		select {
+		case <-stop:
+			return nil
+		default:
+		}
+		var ne interface{ Temporary() bool }
+		if errors.As(err, &ne) && ne.Temporary() {
+			if delay == 0 {
+				delay = 5 * time.Millisecond
+			} else if delay *= 2; delay > time.Second {
+				delay = time.Second
+			}
+			slog.Default().Warn("ipc accept failed, retrying", "err", err, "delay", delay)
+			select {
+			case <-time.After(delay):
+			case <-stop:
+				return nil
+			}
+			continue
+		}
+		return fmt.Errorf("ipc accept: %w", err)
+	}
 }
 
 func handle(conn net.Conn, emit func(Event) error) {
