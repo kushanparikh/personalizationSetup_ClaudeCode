@@ -4,6 +4,7 @@
 package settings
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,7 +24,15 @@ import (
 type File struct {
 	Path string
 	root *jsonx.Object
+	// loaded and existed are the file's bytes at Load, so Save can tell
+	// whether it changed in between.
+	loaded  []byte
+	existed bool
 }
+
+// ErrChangedSinceLoad is returned by Save when the file on disk changed
+// after Load; nothing is written.
+var ErrChangedSinceLoad = errors.New("~/.claude/settings.json changed while this app was editing it. Nothing was changed; try again.")
 
 // InvalidError reports a settings.json that isn't valid JSON.
 type InvalidError struct {
@@ -53,19 +62,19 @@ func parse(path string, data []byte) (*jsonx.Object, error) {
 	return o, nil
 }
 
-// readTarget reads path; a missing file gives nil data.
-func readTarget(path string) ([]byte, error) {
-	data, err := os.ReadFile(path)
+// readTarget reads path; a missing file gives nil data and exists false.
+func readTarget(path string) (data []byte, exists bool, err error) {
+	data, err = os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return nil, nil
+		return nil, false, nil
 	}
-	return data, err
+	return data, err == nil, err
 }
 
 // Load reads path. A missing or empty file gives an empty object; invalid
 // JSON gives *InvalidError.
 func Load(path string) (*File, error) {
-	data, err := readTarget(path)
+	data, exists, err := readTarget(path)
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +82,7 @@ func Load(path string) (*File, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &File{Path: path, root: root}, nil
+	return &File{Path: path, root: root, loaded: data, existed: exists}, nil
 }
 
 // HookEntry is one inner hook entry, in file order.
@@ -304,9 +313,11 @@ func (f *File) resolve() (string, error) {
 	return f.Path, nil
 }
 
-// Save writes the file: it re-reads and validates the target, backs it up,
-// checks the new content parses, and replaces the target atomically. It
-// returns the backup path, or "" if there was nothing to back up.
+// Save writes the file: it re-reads and validates the target, refuses with
+// ErrChangedSinceLoad if it changed since Load, backs it up, checks the new
+// content parses, and replaces the target atomically. It returns the backup
+// path, or "" if there was nothing to back up. If the new content equals the
+// current file, Save does nothing and returns "".
 func (f *File) Save(o SaveOptions) (backupPath string, err error) {
 	if o.BackupDir == "" {
 		return "", errors.New("settings: no backup directory")
@@ -318,14 +329,20 @@ func (f *File) Save(o SaveOptions) (backupPath string, err error) {
 	if err != nil {
 		return "", err
 	}
-	current, err := readTarget(target)
+	current, exists, err := readTarget(target)
 	if err != nil {
 		return "", err
 	}
 	if _, err := parse(f.Path, current); err != nil {
 		return "", err
 	}
+	if exists != f.existed || !bytes.Equal(current, f.loaded) {
+		return "", ErrChangedSinceLoad
+	}
 	out := jsonx.Marshal(f.root)
+	if exists && bytes.Equal(out, current) {
+		return "", nil
+	}
 	if _, err := jsonx.Parse(out); err != nil {
 		return "", fmt.Errorf("settings: refusing to write output that doesn't parse: %w", err)
 	}

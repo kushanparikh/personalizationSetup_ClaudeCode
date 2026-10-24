@@ -619,3 +619,115 @@ func TestPruneOrderWithSuffixes(t *testing.T) {
 		t.Fatalf("kept %v, want %v", got, want)
 	}
 }
+
+func backupNames(t *testing.T, dir string) []string {
+	t.Helper()
+	ents, err := os.ReadDir(dir)
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, e := range ents {
+		if backupName.MatchString(e.Name()) {
+			out = append(out, e.Name())
+		}
+	}
+	return out
+}
+
+func TestIdenticalSavesKeepFirstBackup(t *testing.T) {
+	p, o := setup(t, userSettings)
+	for i := 0; i < 5; i++ {
+		f := load(t, p)
+		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+		b := save(t, f, o)
+		if i > 0 && b != "" {
+			t.Fatalf("save %d made backup %q for an identical file", i, b)
+		}
+	}
+	names := backupNames(t, o.BackupDir)
+	if len(names) != 1 {
+		t.Fatalf("backups = %v, want exactly 1", names)
+	}
+	if got := read(t, filepath.Join(o.BackupDir, names[0])); got != userSettings {
+		t.Fatalf("backup isn't the original:\n%s", got)
+	}
+	if !strings.Contains(read(t, p), ourStop) {
+		t.Fatalf("not written:\n%s", read(t, p))
+	}
+}
+
+func TestSaveRefusesIfChangedSinceLoad(t *testing.T) {
+	const changed = "{\n  \"model\": \"sonnet\"\n}\n"
+	t.Run("edited", func(t *testing.T) {
+		p, o := setup(t, userSettings)
+		f := load(t, p)
+		if err := os.WriteFile(p, []byte(changed), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+		_, err := f.Save(o)
+		if !errors.Is(err, ErrChangedSinceLoad) {
+			t.Fatalf("Save err = %v, want ErrChangedSinceLoad", err)
+		}
+		if err.Error() != "~/.claude/settings.json changed while this app was editing it. Nothing was changed; try again." {
+			t.Fatalf("message = %q", err.Error())
+		}
+		if got := read(t, p); got != changed {
+			t.Fatalf("file was written:\n%s", got)
+		}
+		if n := backupNames(t, o.BackupDir); len(n) != 0 {
+			t.Fatalf("backups made: %v", n)
+		}
+	})
+	t.Run("created", func(t *testing.T) {
+		dir := t.TempDir()
+		p := filepath.Join(dir, "settings.json")
+		f := load(t, p)
+		if err := os.WriteFile(p, []byte(changed), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+		if _, err := f.Save(SaveOptions{BackupDir: filepath.Join(dir, "backups")}); !errors.Is(err, ErrChangedSinceLoad) {
+			t.Fatalf("Save err = %v, want ErrChangedSinceLoad", err)
+		}
+		if got := read(t, p); got != changed {
+			t.Fatalf("file was written:\n%s", got)
+		}
+	})
+	t.Run("deleted", func(t *testing.T) {
+		p, o := setup(t, "")
+		f := load(t, p)
+		if err := os.Remove(p); err != nil {
+			t.Fatal(err)
+		}
+		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+		if _, err := f.Save(o); !errors.Is(err, ErrChangedSinceLoad) {
+			t.Fatalf("Save err = %v, want ErrChangedSinceLoad", err)
+		}
+		if _, err := os.Lstat(p); !os.IsNotExist(err) {
+			t.Fatalf("file was written: %v", err)
+		}
+	})
+}
+
+func TestSaveRefusesDanglingSymlink(t *testing.T) {
+	dir := t.TempDir()
+	link := filepath.Join(dir, "settings.json")
+	target := filepath.Join(dir, "missing", "settings.json")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	f := load(t, link)
+	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+	if _, err := f.Save(SaveOptions{BackupDir: filepath.Join(dir, "backups")}); err == nil {
+		t.Fatal("Save through a dangling symlink succeeded")
+	}
+	st, err := os.Lstat(link)
+	if err != nil || st.Mode()&os.ModeSymlink == 0 {
+		t.Fatalf("link replaced: %v %v", st, err)
+	}
+	if _, err := os.Lstat(target); !os.IsNotExist(err) {
+		t.Fatalf("target created: %v", err)
+	}
+}
