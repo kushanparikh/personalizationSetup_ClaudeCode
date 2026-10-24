@@ -113,8 +113,11 @@ func soundFocusArgs(a Answers) string {
 }
 
 // Entries returns the settings.json hook entries for the type. Commands are
-// built only from validated enum values.
+// built only from validated enum values; invalid answers yield nil.
 func Entries(t Type, a Answers) []Entry {
+	if Validate(t, a) != nil {
+		return nil
+	}
 	switch t {
 	case GitStatus:
 		cmd := CommandPrefix + "session-start"
@@ -149,7 +152,10 @@ func ParseCommand(cmd string) (Parsed, bool) {
 	if !ok {
 		return Parsed{}, false
 	}
-	fields := strings.Split(rest, " ")
+	fields := strings.Fields(rest)
+	if len(fields) == 0 {
+		return Parsed{}, false
+	}
 	sub := fields[0]
 	var t Type
 	switch sub {

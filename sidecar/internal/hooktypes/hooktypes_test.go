@@ -119,3 +119,31 @@ func TestParseArgsDefaults(t *testing.T) {
 		t.Error("untracked default")
 	}
 }
+
+func TestEntriesRejectsInvalid(t *testing.T) {
+	bad := []struct {
+		typ Type
+		a   Answers
+	}{
+		{Finished, Answers{Sound: "Glass; rm -rf ~"}},
+		{Finished, Answers{}},
+		{InputNeeded, Answers{}},
+		{InputNeeded, Answers{Sound: "$(x)"}},
+		{"bogus", Answers{Sound: "Glass"}},
+	}
+	for _, c := range bad {
+		if got := Entries(c.typ, c.a); got != nil {
+			t.Errorf("%s %+v: got %#v want nil", c.typ, c.a, got)
+		}
+	}
+}
+
+func TestParseCommandEdgeCases(t *testing.T) {
+	if _, ok := ParseCommand("~/.pcs/bin/pcs-hook hook "); ok {
+		t.Error("empty sub parsed")
+	}
+	p, ok := ParseCommand("~/.pcs/bin/pcs-hook hook stop --sound")
+	if !ok || p.Type != Finished || p.Answers.Sound != "" {
+		t.Errorf("%+v ok=%v", p, ok)
+	}
+}
