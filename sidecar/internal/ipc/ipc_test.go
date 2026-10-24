@@ -317,3 +317,71 @@ func TestSendLaunchBounded(t *testing.T) {
 		t.Fatalf("took %v", d)
 	}
 }
+
+// serveErr runs Serve and returns its error, failing if it doesn't return
+// within a second.
+func serveErr(t *testing.T, socket string) error {
+	t.Helper()
+	stop := make(chan struct{})
+	done := make(chan error, 1)
+	go func() { done <- Serve(socket, io.Discard, stop) }()
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(time.Second):
+		close(stop)
+		<-done
+		t.Fatal("Serve started instead of refusing")
+		return nil
+	}
+}
+
+func TestServeTightensExistingRunDir(t *testing.T) {
+	dir := filepath.Join(shortDir(t), "run")
+	if err := os.Mkdir(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	s := startServe(t, filepath.Join(dir, "a.sock"))
+	if got := s.next(t); got != readyLine {
+		t.Fatalf("got %q", got)
+	}
+	di, err := os.Stat(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if di.Mode().Perm() != 0o700 {
+		t.Fatalf("dir mode %v, want 0700", di.Mode().Perm())
+	}
+}
+
+func TestServeRefusesNonSocketAtPath(t *testing.T) {
+	sock := filepath.Join(shortDir(t), "a.sock")
+	if err := os.WriteFile(sock, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := serveErr(t, sock); err == nil {
+		t.Fatal("Serve replaced a regular file")
+	}
+	b, err := os.ReadFile(sock)
+	if err != nil || string(b) != "keep" {
+		t.Fatalf("file changed: %q %v", b, err)
+	}
+}
+
+func TestServeRefusesSymlinkedRunDir(t *testing.T) {
+	base := shortDir(t)
+	real := filepath.Join(base, "real")
+	if err := os.Mkdir(real, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(base, "run")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if err := serveErr(t, filepath.Join(link, "a.sock")); err == nil {
+		t.Fatal("Serve accepted a symlinked run dir")
+	}
+}

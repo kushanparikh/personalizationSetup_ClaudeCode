@@ -148,14 +148,14 @@ func (c *Client) Send(e Event, launchIfDown bool) error {
 // Serve listens on socket and forwards each valid event as one JSON line on
 // out until stop closes.
 func Serve(socket string, out io.Writer, stop <-chan struct{}) error {
-	if err := os.MkdirAll(filepath.Dir(socket), 0o700); err != nil {
+	if err := prepareDir(filepath.Dir(socket)); err != nil {
 		return err
 	}
 	if c, err := net.DialTimeout("unix", socket, 200*time.Millisecond); err == nil {
 		c.Close()
 		return ErrAlreadyRunning
 	}
-	if err := os.Remove(socket); err != nil && !os.IsNotExist(err) {
+	if err := removeStale(socket); err != nil {
 		return err
 	}
 	ln, err := net.Listen("unix", socket)
@@ -206,6 +206,41 @@ func Serve(socket string, out io.Writer, stop <-chan struct{}) error {
 	wg.Wait()
 	os.Remove(socket)
 	return err
+}
+
+// prepareDir creates the socket's directory and makes sure it is a real
+// directory (not a symlink) owned by this user with mode 0700.
+func prepareDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return err
+	}
+	fi, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if !fi.IsDir() || !ownedByMe(fi) {
+		return fmt.Errorf("ipc: %s isn't a directory owned by you; not listening there", dir)
+	}
+	return os.Chmod(dir, 0o700)
+}
+
+// removeStale removes a leftover socket at path. Anything else there is
+// left alone and reported.
+func removeStale(path string) error {
+	fi, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if fi.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("ipc: %s exists and isn't a socket; not replacing it", path)
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
 }
 
 // acceptLoop accepts until stop closes (returns nil) or a permanent error
