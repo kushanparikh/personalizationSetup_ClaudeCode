@@ -476,3 +476,31 @@ func TestPanicBecomesError(t *testing.T) {
 		t.Fatalf("code %d, out %q", code, out.String())
 	}
 }
+
+func TestUninstallRemovesUnknownOwnedEntries(t *testing.T) {
+	const in = `{
+  "model": "opus",
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.pcs/bin/pcs-hook hook future-thing",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}
+`
+	e := newEnv(t, in)
+	res := e.ok("uninstall", "--yes")
+	if n, _ := res["removedHooks"].(float64); n != 1 {
+		t.Fatalf("removedHooks = %v", res)
+	}
+	if want := "{\n  \"model\": \"opus\"\n}\n"; e.settings() != want {
+		t.Fatalf("settings:\n%s", e.settings())
+	}
+}

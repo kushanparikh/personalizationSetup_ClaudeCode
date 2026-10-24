@@ -731,3 +731,40 @@ func TestSaveRefusesDanglingSymlink(t *testing.T) {
 		t.Fatalf("target created: %v", err)
 	}
 }
+
+func TestRemoveAllOwnedByPrefix(t *testing.T) {
+	const in = `{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.pcs/bin/pcs-hook hook future-thing --x",
+            "timeout": 5
+          },
+          {
+            "type": "command",
+            "command": "~/.claude/hooks/notify-done.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
+`
+	p, o := setup(t, in)
+	f := load(t, p)
+	if n := f.RemoveOwned(hooktypes.Finished); n != 0 {
+		t.Fatalf("RemoveOwned(finished) = %d, want 0", n)
+	}
+	if n := f.RemoveAllOwned(); n != 1 {
+		t.Fatalf("RemoveAllOwned = %d, want 1", n)
+	}
+	save(t, f, o)
+	got := read(t, p)
+	if strings.Contains(got, "future-thing") || !strings.Contains(got, "notify-done.sh") {
+		t.Fatalf("got:\n%s", got)
+	}
+}
