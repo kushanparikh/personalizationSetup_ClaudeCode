@@ -2,7 +2,9 @@ package hookrun
 
 import (
 	"bytes"
+	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -145,5 +147,30 @@ func TestUnknownSub(t *testing.T) {
 	r := &rec{}
 	if got := run(t, "bogus", nil, `{}`, r.deps(nil)); got != "" || len(r.events) != 0 {
 		t.Fatal("expected nothing")
+	}
+}
+
+type panicHandler struct{}
+
+func (panicHandler) Enabled(context.Context, slog.Level) bool  { panic("log") }
+func (panicHandler) Handle(context.Context, slog.Record) error { panic("log") }
+func (h panicHandler) WithAttrs([]slog.Attr) slog.Handler      { panic("log") }
+func (h panicHandler) WithGroup(string) slog.Handler           { panic("log") }
+
+func TestPanickingLoggerStillZero(t *testing.T) {
+	for _, sub := range []string{"stop", "notification", "moved-on", "bogus"} {
+		r := &rec{panicOn: true}
+		d := r.deps(nil)
+		d.Log = slog.New(panicHandler{})
+		run(t, sub, nil, `{}`, d)
+	}
+}
+
+func TestNoStdoutExceptSessionStart(t *testing.T) {
+	for _, sub := range []string{"stop", "notification", "moved-on", "bogus"} {
+		r := &rec{}
+		if got := run(t, sub, nil, `{}`, r.deps(nil)); got != "" {
+			t.Fatalf("%s wrote %q", sub, got)
+		}
 	}
 }

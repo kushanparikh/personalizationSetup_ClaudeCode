@@ -3,6 +3,7 @@
 package hookrun
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -51,9 +52,11 @@ func DefaultDeps() Deps {
 
 // Run executes one hook subcommand and always returns 0.
 func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (code int) {
-	log := d.Log
-	if log == nil {
+	var log *slog.Logger
+	if d.Log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
+	} else {
+		log = slog.New(safeHandler{d.Log.Handler()})
 	}
 	defer func() {
 		if r := recover(); r != nil {
@@ -126,6 +129,49 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 	}
 	return 0
 }
+
+// safeHandler swallows panics from the wrapped handler so logging can never
+// break the always-exit-0 guarantee.
+type safeHandler struct{ h slog.Handler }
+
+func (s safeHandler) Enabled(ctx context.Context, l slog.Level) (ok bool) {
+	defer func() {
+		if recover() != nil {
+			ok = false
+		}
+	}()
+	return s.h.Enabled(ctx, l)
+}
+
+func (s safeHandler) Handle(ctx context.Context, r slog.Record) (err error) {
+	defer func() { _ = recover() }()
+	return s.h.Handle(ctx, r)
+}
+
+func (s safeHandler) WithAttrs(a []slog.Attr) (h slog.Handler) {
+	defer func() {
+		if recover() != nil {
+			h = safeHandler{discardHandler{}}
+		}
+	}()
+	return safeHandler{s.h.WithAttrs(a)}
+}
+
+func (s safeHandler) WithGroup(n string) (h slog.Handler) {
+	defer func() {
+		if recover() != nil {
+			h = safeHandler{discardHandler{}}
+		}
+	}()
+	return safeHandler{s.h.WithGroup(n)}
+}
+
+type discardHandler struct{}
+
+func (discardHandler) Enabled(context.Context, slog.Level) bool  { return false }
+func (discardHandler) Handle(context.Context, slog.Record) error { return nil }
+func (d discardHandler) WithAttrs([]slog.Attr) slog.Handler      { return d }
+func (d discardHandler) WithGroup(string) slog.Handler           { return d }
 
 func send(d Deps, log *slog.Logger, e ipc.Event, launch bool) {
 	if err := d.Send(e, launch); err != nil {
