@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"unicode/utf8"
 )
 
 // Object is a JSON object that remembers key order. Values are *Object,
@@ -31,6 +32,9 @@ func (o *Object) Get(k string) (any, bool) {
 
 // Set replaces k in place, or appends it as a new last key.
 func (o *Object) Set(k string, v any) {
+	if o.Vals == nil {
+		o.Vals = map[string]any{}
+	}
 	if _, ok := o.Vals[k]; !ok {
 		o.Keys = append(o.Keys, k)
 	}
@@ -70,13 +74,28 @@ func syntaxErr(data []byte, offset int64, msg string) *SyntaxError {
 	}
 	prefix := data[:offset]
 	line := bytes.Count(prefix, []byte{'\n'}) + 1
-	col := int(offset) - bytes.LastIndexByte(prefix, '\n')
+	// offset counts bytes read, so the offending byte is the last one.
+	col := int(offset) - bytes.LastIndexByte(prefix, '\n') - 1
+	if col < 1 {
+		col = 1
+	}
 	return &SyntaxError{Line: line, Col: col, Msg: msg}
 }
 
 // Parse decodes data, whose root must be an object. Duplicate keys keep the
 // first position and the last value.
 func Parse(data []byte) (*Object, error) {
+	if !utf8.Valid(data) {
+		off := 0
+		for off < len(data) {
+			r, n := utf8.DecodeRune(data[off:])
+			if r == utf8.RuneError && n <= 1 {
+				break
+			}
+			off += n
+		}
+		return nil, syntaxErr(data, int64(off+1), "invalid UTF-8")
+	}
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.UseNumber()
 	tok, err := dec.Token()
@@ -96,7 +115,65 @@ func Parse(data []byte) (*Object, error) {
 		}
 		return nil, wrapErr(data, dec, err)
 	}
+	if err := checkSurrogates(data); err != nil {
+		return nil, err
+	}
 	return obj, nil
+}
+
+// checkSurrogates rejects \u escapes that form an unpaired surrogate, which
+// would otherwise be silently rewritten as U+FFFD. data must be valid JSON.
+func checkSurrogates(data []byte) error {
+	hex := func(i int) (rune, bool) {
+		if i+6 > len(data) || data[i] != '\\' || data[i+1] != 'u' {
+			return 0, false
+		}
+		var r rune
+		for _, c := range data[i+2 : i+6] {
+			switch {
+			case c >= '0' && c <= '9':
+				c -= '0'
+			case c >= 'a' && c <= 'f':
+				c = c - 'a' + 10
+			case c >= 'A' && c <= 'F':
+				c = c - 'A' + 10
+			default:
+				return 0, false
+			}
+			r = r<<4 | rune(c)
+		}
+		return r, true
+	}
+	inStr := false
+	for i := 0; i < len(data); i++ {
+		c := data[i]
+		if !inStr {
+			inStr = c == '"'
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = false
+		case '\\':
+			if i+1 < len(data) && data[i+1] == 'u' {
+				r, _ := hex(i)
+				switch {
+				case r >= 0xD800 && r < 0xDC00:
+					if lo, ok := hex(i + 6); ok && lo >= 0xDC00 && lo < 0xE000 {
+						i += 11
+						continue
+					}
+					return syntaxErr(data, int64(i+1), fmt.Sprintf("unpaired surrogate \\u%04x", r))
+				case r >= 0xDC00 && r < 0xE000:
+					return syntaxErr(data, int64(i+1), fmt.Sprintf("unpaired surrogate \\u%04x", r))
+				}
+				i += 5
+			} else {
+				i++
+			}
+		}
+	}
+	return nil
 }
 
 func wrapErr(data []byte, dec *json.Decoder, err error) error {

@@ -1,6 +1,7 @@
 package jsonx
 
 import (
+	"encoding/json"
 	"errors"
 	"testing"
 )
@@ -99,8 +100,8 @@ func TestSyntaxErrorPosition(t *testing.T) {
 	if !errors.As(err, &se) {
 		t.Fatalf("want *SyntaxError, got %T %v", err, err)
 	}
-	if se.Line != 3 {
-		t.Fatalf("Line = %d, want 3 (%+v)", se.Line, se)
+	if se.Line != 3 || se.Col != 1 {
+		t.Fatalf("Line,Col = %d,%d, want 3,1 (%+v)", se.Line, se.Col, se)
 	}
 }
 
@@ -142,5 +143,42 @@ func TestSetGetDelete(t *testing.T) {
 func TestTrailingGarbageRejected(t *testing.T) {
 	if _, err := Parse([]byte(`{} x`)); err == nil {
 		t.Fatal("expected error")
+	}
+}
+
+func wantSyntax(t *testing.T, in string, line, col int) {
+	t.Helper()
+	_, err := Parse([]byte(in))
+	var se *SyntaxError
+	if !errors.As(err, &se) {
+		t.Fatalf("want *SyntaxError, got %T %v", err, err)
+	}
+	if se.Line != line || se.Col != col {
+		t.Fatalf("Line,Col = %d,%d, want %d,%d (%v)", se.Line, se.Col, line, col, se)
+	}
+}
+
+func TestRejectsInvalidUTF8(t *testing.T) {
+	wantSyntax(t, "{\n  \"a\": \"x\xffy\"\n}", 2, 10)
+}
+
+func TestRejectsLoneSurrogate(t *testing.T) {
+	wantSyntax(t, `{`+"\n"+`  "a": "\ud800"}`, 2, 9)
+	wantSyntax(t, `{"a": "\udc00x"}`, 1, 8)
+	wantSyntax(t, `{"a": "\ud800\u0041"}`, 1, 8)
+}
+
+func TestValidSurrogatePairKept(t *testing.T) {
+	want := "{\n  \"a\": \"🌿\"\n}\n"
+	if got := roundTrip(t, `{"a":"\ud83c\udf3f"}`); got != want {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestZeroObjectSet(t *testing.T) {
+	var o Object
+	o.Set("a", json.Number("1"))
+	if got := string(Marshal(&o)); got != "{\n  \"a\": 1\n}\n" {
+		t.Fatalf("got %q", got)
 	}
 }
