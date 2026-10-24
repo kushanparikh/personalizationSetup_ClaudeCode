@@ -53,14 +53,20 @@ func Summary(cwd string, untrackedDirty bool) (string, error) {
 		if len(line) < 2 {
 			continue
 		}
+		x, y := line[0], line[1]
 		switch {
-		case strings.HasPrefix(line, "??"):
+		case x == '?' && y == '?':
 			untracked++
 			continue
-		case strings.ContainsRune("MADRC", rune(line[0])):
+		case x == '!' && y == '!':
+			continue
+		}
+		// Any index change (including U for a conflict, T for a type
+		// change) is staged; any worktree change is unstaged.
+		if x != ' ' && x != '?' && x != '!' {
 			staged++
 		}
-		if line[1] == 'M' || line[1] == 'D' {
+		if y != ' ' {
 			unstaged++
 		}
 	}

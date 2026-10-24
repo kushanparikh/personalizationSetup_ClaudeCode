@@ -141,3 +141,52 @@ func TestSummaryPathWithSpaces(t *testing.T) {
 		t.Fatalf("got %q", got)
 	}
 }
+
+func TestMergeConflictDirty(t *testing.T) {
+	dir := newRepo(t, "proj")
+	commitFiles(t, dir, "a.txt")
+	git(t, dir, "checkout", "-b", "other")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("other\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "commit", "-am", "other")
+	git(t, dir, "checkout", "main")
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "commit", "-am", "main")
+	if out, err := exec.Command("git", "-C", dir, "merge", "other").CombinedOutput(); err == nil {
+		t.Fatalf("merge didn't conflict:\n%s", out)
+	}
+	if st := git(t, dir, "status", "--porcelain"); st != "UU a.txt" {
+		t.Fatalf("status = %q, want UU", st)
+	}
+	got, err := Summary(dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "📁 proj  🌿 main  ⚠️ dirty (staged: 1, unstaged: 1, untracked: 0)"; got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestTypeChangeDirty(t *testing.T) {
+	dir := newRepo(t, "proj")
+	commitFiles(t, dir, "a.txt", "b.txt")
+	if err := os.Remove(filepath.Join(dir, "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("b.txt", filepath.Join(dir, "a.txt")); err != nil {
+		t.Fatal(err)
+	}
+	if st := git(t, dir, "status", "--porcelain"); st != "T a.txt" { // leading space trimmed
+		t.Fatalf("status = %q, want \" T a.txt\"", st)
+	}
+	got, err := Summary(dir, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "📁 proj  🌿 main  ⚠️ dirty (staged: 0, unstaged: 1, untracked: 0)"; got != want {
+		t.Fatalf("got %q want %q", got, want)
+	}
+}
