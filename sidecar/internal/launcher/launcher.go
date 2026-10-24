@@ -11,10 +11,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/paths"
 )
 
 const script = `#!/bin/sh
-# Installed by Personalization Setup. Runs the app's hook handler; if the app is gone, does nothing.
+# Installed by @APP@. Runs the app's hook handler; if the app is gone, does nothing.
 BIN="@BIN@"
 if [ ! -x "$BIN" ]; then
   cat >/dev/null
@@ -24,7 +26,9 @@ exec "$BIN" "$@"
 `
 
 // Script returns the launcher script for bin.
-func Script(bin string) string { return strings.Replace(script, "@BIN@", bin, 1) }
+func Script(bin string) string {
+	return strings.NewReplacer("@APP@", paths.AppName, "@BIN@", bin).Replace(script)
+}
 
 // Install writes the launcher for bin at path with mode 0755. It writes only
 // if the content or mode differs, and reports whether it changed anything.

@@ -1,6 +1,8 @@
 // Package perms describes the macOS permissions the app can need.
 package perms
 
+import "github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/paths"
+
 // ID names a permission.
 type ID string
 
@@ -34,14 +36,14 @@ func Lookup(id ID) Info {
 		return Info{
 			ID:          id,
 			Title:       "Notifications",
-			Steps:       "Open System Settings → Notifications → Personalization Setup, turn on Allow Notifications, and choose the Temporary style.",
+			Steps:       "Open System Settings → Notifications → " + paths.AppName + ", turn on Allow Notifications, and choose the Temporary style.",
 			SettingsURL: "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
 		}
 	case AutomationTerminal:
 		return Info{
 			ID:          id,
 			Title:       "Control Terminal",
-			Steps:       "Open System Settings → Privacy & Security → Automation → Personalization Setup, and turn on Terminal.",
+			Steps:       "Open System Settings → Privacy & Security → Automation → " + paths.AppName + ", and turn on Terminal.",
 			SettingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
 		}
 	}

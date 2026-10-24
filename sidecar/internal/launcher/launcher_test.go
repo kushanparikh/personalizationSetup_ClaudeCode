@@ -111,3 +111,18 @@ func TestEnsureInstalledKeepsExisting(t *testing.T) {
 		t.Fatal("unsafe path accepted")
 	}
 }
+
+func TestScriptText(t *testing.T) {
+	want := `#!/bin/sh
+# Installed by Personalization Setup. Runs the app's hook handler; if the app is gone, does nothing.
+BIN="/x/pcs"
+if [ ! -x "$BIN" ]; then
+  cat >/dev/null
+  exit 0
+fi
+exec "$BIN" "$@"
+`
+	if got := Script("/x/pcs"); got != want {
+		t.Fatalf("Script =\n%s\nwant\n%s", got, want)
+	}
+}
