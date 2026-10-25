@@ -238,6 +238,31 @@ describe("App", () => {
     await waitFor(() => expect(count(calls, "get_state")).toBe(2));
   });
 
+  it("focus_refresh_does_not_clobber_newer_write", async () => {
+    const before = fixture();
+    const after = fixture({ hooks: [gitStatus, { ...finished, enabled: false, status: "off" }] });
+    let gets = 0;
+    let releaseStale: (r: Report) => void = () => {};
+    const calls = setup(before, {
+      get_state: () => {
+        gets += 1;
+        if (gets === 1) return before;
+        return new Promise<Report>((res) => (releaseStale = res));
+      },
+      disable_hook: () => after,
+    });
+    const list = await myHooks();
+    await fireEvent.click(within(list).getByText("Finished working"));
+    window.dispatchEvent(new Event("focus"));
+    await waitFor(() => expect(count(calls, "get_state")).toBe(2));
+    await fireEvent.click(screen.getByRole("button", { name: "Turn off" }));
+    expect(await screen.findByRole("button", { name: "Turn on" })).toBeTruthy();
+    releaseStale(before);
+    await new Promise((r) => setTimeout(r, 10));
+    expect(screen.getByRole("button", { name: "Turn on" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Turn off" })).toBeNull();
+  });
+
   it("spaces_note_on_notification_hooks", async () => {
     const note =
       "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward.";

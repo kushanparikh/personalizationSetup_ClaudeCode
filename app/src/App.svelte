@@ -45,9 +45,13 @@
   // Coming back to the window re-reads settings and permissions (spec §4.3) without clearing messages.
   function onFocus() {
     if (store.busy) return;
+    // A write may start (and finish) while this read is in flight; never let the older read win.
+    const seen = store.report;
     api
       .state()
-      .then((r) => (store.report = r))
+      .then((r) => {
+        if (!store.busy && store.report === seen) store.report = r;
+      })
       .catch((e) => (store.error = e instanceof Error ? e.message : String(e)));
   }
 
