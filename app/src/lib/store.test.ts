@@ -63,6 +63,18 @@ describe("AppStore", () => {
     expect(s.busy).toBe(false);
   });
 
+  it("save_requests_permission_when_unknown", async () => {
+    const calls = script({
+      apply_hook: () => report({}, "unknown"),
+      request_permission: () => ({ status: "granted" }),
+      get_state: () => report({}, "granted", true),
+    });
+    const s = new AppStore();
+    await s.saveAndApply("finished", answers);
+    expect(calls).toEqual(["apply_hook", "request_permission", "get_state"]);
+    expect(s.notice).toBe("✅ Saved. Finished working is set up.");
+  });
+
   it("save_pending_when_denied", async () => {
     const calls = script({
       apply_hook: () => report({}, "denied"),

@@ -53,7 +53,7 @@ export class AppStore {
       const hook = report.hooks.find((h) => h.type === type);
       let asked = false;
       for (const need of hook?.needs ?? []) {
-        if (need.status === "not-asked") {
+        if (need.status === "not-asked" || need.status === "unknown") {
           await api.requestPermission(need.id);
           asked = true;
         }
