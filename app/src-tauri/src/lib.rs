@@ -2,8 +2,14 @@
 
 use std::path::{Path, PathBuf};
 
+// used by alerts (Task 6)
+#[allow(dead_code)]
+mod board;
 pub mod commands;
 pub mod events;
+// used by alerts (Task 6)
+#[allow(dead_code)]
+mod layout;
 pub mod serve;
 pub mod sidecar;
 
