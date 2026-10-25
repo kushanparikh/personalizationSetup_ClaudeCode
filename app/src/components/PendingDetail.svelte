@@ -1,0 +1,86 @@
+<script lang="ts">
+  import type { AppStore } from "../lib/store.svelte";
+  import type { PendingItem } from "../lib/types";
+
+  let { store, item }: { store: AppStore; item: PendingItem } = $props();
+</script>
+
+<article class="detail">
+  <header>
+    <span class="lamp" aria-hidden="true"></span>
+    <div>
+      <h1>{item.title}</h1>
+      <p class="status">{item.status === "denied" ? "Not allowed" : "Not allowed yet"}</p>
+    </div>
+  </header>
+
+  {#if item.steps.length > 0}
+    <ol class="steps">
+      {#each item.steps as s, i (i)}
+        <li>{s}</li>
+      {/each}
+    </ol>
+  {/if}
+
+  <p class="affects">Affects: {item.affects.join(", ")}</p>
+
+  <div class="actions">
+    <button type="button" class="btn primary" onclick={() => store.openSettings(item.settingsUrl)}>Open Settings</button>
+  </div>
+  <p class="hint">Come back to this window when you're done. It checks again automatically.</p>
+</article>
+
+<style>
+  header {
+    display: flex;
+    align-items: stretch;
+    gap: 14px;
+  }
+  .lamp {
+    flex: none;
+    width: var(--lamp-w);
+    border-radius: 2px;
+    background: var(--c-lamp-wait);
+  }
+  h1 {
+    margin: 0;
+    font-family: var(--f-name);
+    font-size: var(--t-xl);
+    font-weight: var(--w-semibold);
+    letter-spacing: -0.015em;
+    line-height: var(--lh-tight);
+  }
+  .status {
+    margin: 3px 0 0;
+    font-size: var(--t-sm);
+    color: var(--c-muted);
+  }
+  .steps {
+    margin: 22px 0 0;
+    padding: 18px 0 0 22px;
+    border-top: 1px solid var(--c-hairline);
+    max-width: 60ch;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: var(--t-md);
+    line-height: 1.4;
+  }
+  .steps li::marker {
+    color: var(--c-muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .affects {
+    margin: 18px 0 0;
+    font-size: var(--t-sm);
+    color: var(--c-muted);
+  }
+  .actions {
+    margin-top: 22px;
+  }
+  .hint {
+    margin: 10px 0 0;
+    font-size: var(--t-xs);
+    color: var(--c-muted);
+  }
+</style>

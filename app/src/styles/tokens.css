@@ -21,6 +21,14 @@
   --c-danger: #c2412d;
   --c-focus: #3a6fd8;
 
+  /* config window (extends the palette above) */
+  --c-sidebar: #e7ebf0; /* deeper frost for the source list */
+  --c-selected: #d6dde6; /* selected sidebar row */
+  --c-on-ink: #ffffff; /* text on a graphite button */
+  --c-wash-wait: #fbf1dc; /* banner behind a sodium lamp */
+  --c-wash-danger: #f9e4e0;
+  --c-wash-done: #e1f1ed;
+
   /* type */
   --f-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
   --f-name: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
@@ -29,6 +37,7 @@
   --t-sm: 13px;
   --t-md: 15px;
   --t-lg: 20px;
+  --t-xl: 26px;
   --lh-tight: 1.2;
   --lh-body: 1.25;
   --w-regular: 400;
@@ -57,5 +66,11 @@
     --c-lamp-done: #4fb59f;
     --c-danger: #ef7a66;
     --c-focus: #7aa2f0;
+    --c-sidebar: #171c23;
+    --c-selected: #2c3542;
+    --c-on-ink: #171c23;
+    --c-wash-wait: #3a3021;
+    --c-wash-danger: #3d2523;
+    --c-wash-done: #1e3530;
   }
 }
