@@ -78,12 +78,17 @@ type Client struct {
 	LaunchWait  time.Duration
 }
 
+// launchArgs is the argv for `open`: start the app hidden and in the background.
+func launchArgs() []string {
+	return []string{"-g", "-j", "-a", paths.AppPath(), "--args", "--background"}
+}
+
 // DefaultClient targets the app socket and launches the app with `open`.
 func DefaultClient() *Client {
 	return &Client{
 		Socket: paths.SocketPath(),
 		Launch: func() error {
-			cmd := exec.Command("open", "-g", "-j", "-a", paths.AppPath())
+			cmd := exec.Command("open", launchArgs()...)
 			if err := cmd.Start(); err != nil {
 				return err
 			}

@@ -348,7 +348,7 @@ func TestApplyRefusesUneditableHooks(t *testing.T) {
 
 func TestStateReport(t *testing.T) {
 	e := newEnv(t, userSettings)
-	rep := e.ok("state", "--notifications", "granted")
+	rep := e.ok("state")
 	if other, _ := rep["otherHooks"].([]any); len(other) != 3 {
 		t.Fatalf("otherHooks = %v", rep["otherHooks"])
 	}
@@ -358,7 +358,32 @@ func TestStateReport(t *testing.T) {
 	if lp, _ := rep["logPath"].(string); lp != filepath.Join(e.home, "Library", "Logs", "Personalization Setup", "pcs.log") {
 		t.Fatalf("logPath = %q", lp)
 	}
-	e.fail("state", "--notifications", "maybe")
+}
+
+func TestStateRejectsNotificationsFlag(t *testing.T) {
+	e := newEnv(t, userSettings)
+	e.fail("state", "--notifications", "granted")
+}
+
+func TestReportNeverListsNotifications(t *testing.T) {
+	e := newEnv(t, userSettings)
+	rep := e.ok("apply", "--type", "finished", "--answers", `{"sound":"Glass","clickToFocus":true}`)
+	for _, key := range []string{"needs", "pending"} {
+		items, _ := rep[key].([]any)
+		for _, it := range items {
+			if m, _ := it.(map[string]any); m["id"] == "notifications" {
+				t.Fatalf("%s lists notifications: %v", key, items)
+			}
+		}
+	}
+	for _, h := range rep["hooks"].([]any) {
+		needs, _ := h.(map[string]any)["needs"].([]any)
+		for _, n := range needs {
+			if n == "notifications" {
+				t.Fatalf("hook needs lists notifications: %v", needs)
+			}
+		}
+	}
 }
 
 func TestUninstall(t *testing.T) {
@@ -411,7 +436,7 @@ func TestErrors(t *testing.T) {
 	e := newEnv(t, userSettings)
 	e.fail()
 	e.fail("bogus")
-	if msg := e.fail("perm", "request", "--id", "notifications"); msg != "notifications are requested by the app" {
+	if msg := e.fail("perm", "request", "--id", "notifications"); msg != `unknown permission "notifications"` {
 		t.Fatalf("error = %q", msg)
 	}
 	if msg := e.fail("send-test", "--type", "finished"); msg != "the app isn't listening for hook events. Is it running?" {

@@ -7,7 +7,6 @@ import "github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal
 type ID string
 
 const (
-	Notifications      ID = "notifications"
 	AutomationTerminal ID = "automation-terminal"
 )
 
@@ -32,13 +31,6 @@ type Info struct {
 // Lookup returns the Info for id; an unknown id yields an Info with only ID set.
 func Lookup(id ID) Info {
 	switch id {
-	case Notifications:
-		return Info{
-			ID:          id,
-			Title:       "Notifications",
-			Steps:       "Open System Settings → Notifications → " + paths.AppName + ", turn on Allow Notifications, and choose the Temporary style.",
-			SettingsURL: "x-apple.systempreferences:com.apple.Notifications-Settings.extension",
-		}
 	case AutomationTerminal:
 		return Info{
 			ID:          id,

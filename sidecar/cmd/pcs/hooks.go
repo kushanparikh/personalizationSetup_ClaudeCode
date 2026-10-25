@@ -24,41 +24,27 @@ import (
 const terminalBundleID = "com.apple.Terminal"
 
 // hookFlags are the flags shared by the commands that change one hook type
-// and print the fresh report. --notifications is passed by the app, the only
-// process that can read that status.
+// and print the fresh report.
 type hookFlags struct {
-	fs            *flag.FlagSet
-	typ, notifyIn *string
+	fs  *flag.FlagSet
+	typ *string
 }
 
 func newHookFlags(name string) hookFlags {
 	fs := newFlags(name)
-	return hookFlags{fs: fs, typ: fs.String("type", "", "hook type"),
-		notifyIn: fs.String("notifications", string(perms.Unknown), "notifications permission status")}
+	return hookFlags{fs: fs, typ: fs.String("type", "", "hook type")}
 }
 
-// parse returns the hook type's Def and the notifications status.
-func (h hookFlags) parse(args []string) (hooktypes.Def, perms.Status, error) {
+// parse returns the hook type's Def.
+func (h hookFlags) parse(args []string) (hooktypes.Def, error) {
 	if err := parse(h.fs, args); err != nil {
-		return hooktypes.Def{}, "", err
-	}
-	notif, err := parseStatus(*h.notifyIn)
-	if err != nil {
-		return hooktypes.Def{}, "", err
+		return hooktypes.Def{}, err
 	}
 	d, ok := hooktypes.Get(hooktypes.Type(*h.typ))
 	if !ok {
-		return hooktypes.Def{}, "", fmt.Errorf("unknown hook type %q", *h.typ)
+		return hooktypes.Def{}, fmt.Errorf("unknown hook type %q", *h.typ)
 	}
-	return d, notif, nil
-}
-
-func parseStatus(s string) (perms.Status, error) {
-	switch st := perms.Status(s); st {
-	case perms.Granted, perms.Denied, perms.NotAsked, perms.Unknown:
-		return st, nil
-	}
-	return "", fmt.Errorf("invalid --notifications status %q", s)
+	return d, nil
 }
 
 // installLauncher always (re)writes the launcher for bin; used by install-launcher.
@@ -108,12 +94,11 @@ func saveSettings(f *settings.File, o settings.SaveOptions, what string) (string
 }
 
 // buildReport reads everything fresh and checks the Automation permission.
-func buildReport(notif perms.Status) report.Report {
+func buildReport() report.Report {
 	f, err := settings.Load(paths.SettingsPath())
 	auto := perms.CheckAutomation(terminalBundleID)
-	slog.Default().Info("permission check", "id", perms.AutomationTerminal, "status", auto, "notifications", notif)
+	slog.Default().Info("permission check", "id", perms.AutomationTerminal, "status", auto)
 	return report.Build(f, err, loadState(), map[perms.ID]perms.Status{
-		perms.Notifications:      notif,
 		perms.AutomationTerminal: auto,
 	})
 }
@@ -151,21 +136,16 @@ func ownedMatch(f *settings.File, t hooktypes.Type, es []hooktypes.Entry) bool {
 
 func cmdState(args []string) (any, error) {
 	fs := newFlags("state")
-	notifyIn := fs.String("notifications", string(perms.Unknown), "notifications permission status")
 	if err := parse(fs, args); err != nil {
 		return nil, err
 	}
-	notif, err := parseStatus(*notifyIn)
-	if err != nil {
-		return nil, err
-	}
-	return buildReport(notif), nil
+	return buildReport(), nil
 }
 
 func cmdApply(args []string) (any, error) {
 	h := newHookFlags("apply")
 	answersIn := h.fs.String("answers", "", "answers JSON")
-	d, notif, err := h.parse(args)
+	d, err := h.parse(args)
 	if err != nil {
 		return nil, err
 	}
@@ -187,7 +167,7 @@ func cmdApply(args []string) (any, error) {
 	st := loadState()
 	st.Hooks[d.Type] = a
 	saveState(st)
-	return buildReport(notif), nil
+	return buildReport(), nil
 }
 
 // decodeAnswers decodes one JSON object into a, rejecting unknown keys and
@@ -205,7 +185,7 @@ func decodeAnswers(in string, a *hooktypes.Answers) error {
 }
 
 func cmdEnable(args []string) (any, error) {
-	d, notif, err := newHookFlags("enable").parse(args)
+	d, err := newHookFlags("enable").parse(args)
 	if err != nil {
 		return nil, err
 	}
@@ -226,11 +206,11 @@ func cmdEnable(args []string) (any, error) {
 	}
 	st.Hooks[d.Type] = a
 	saveState(st)
-	return buildReport(notif), nil
+	return buildReport(), nil
 }
 
 func cmdDisable(args []string) (any, error) {
-	d, notif, err := newHookFlags("disable").parse(args)
+	d, err := newHookFlags("disable").parse(args)
 	if err != nil {
 		return nil, err
 	}
@@ -250,11 +230,11 @@ func cmdDisable(args []string) (any, error) {
 			return nil, err
 		}
 	}
-	return buildReport(notif), nil
+	return buildReport(), nil
 }
 
 func cmdRemove(args []string) (any, error) {
-	d, notif, err := newHookFlags("remove").parse(args)
+	d, err := newHookFlags("remove").parse(args)
 	if err != nil {
 		return nil, err
 	}
@@ -275,7 +255,7 @@ func cmdRemove(args []string) (any, error) {
 		delete(st.Hooks, d.Type)
 		saveState(st)
 	}
-	return buildReport(notif), nil
+	return buildReport(), nil
 }
 
 func cmdUninstall(args []string) (any, error) {

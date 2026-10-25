@@ -91,12 +91,7 @@ func Validate(t Type, a Answers) error {
 func Needs(t Type, a Answers) []perms.ID {
 	need := []perms.ID{}
 	switch t {
-	case Finished:
-		need = append(need, perms.Notifications)
-		if a.ClickToFocus {
-			need = append(need, perms.AutomationTerminal)
-		}
-	case InputNeeded:
+	case Finished, InputNeeded:
 		if a.ClickToFocus {
 			need = append(need, perms.AutomationTerminal)
 		}

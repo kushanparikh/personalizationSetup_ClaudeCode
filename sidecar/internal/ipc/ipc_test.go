@@ -7,11 +7,14 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/paths"
 )
 
 func shortDir(t *testing.T) string {
@@ -383,5 +386,12 @@ func TestServeRefusesSymlinkedRunDir(t *testing.T) {
 	}
 	if err := serveErr(t, filepath.Join(link, "a.sock")); err == nil {
 		t.Fatal("Serve accepted a symlinked run dir")
+	}
+}
+
+func TestDefaultLaunchArgs(t *testing.T) {
+	want := []string{"-g", "-j", "-a", paths.AppPath(), "--args", "--background"}
+	if got := launchArgs(); !reflect.DeepEqual(got, want) {
+		t.Errorf("launchArgs() = %v, want %v", got, want)
 	}
 }

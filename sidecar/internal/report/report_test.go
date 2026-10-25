@@ -110,7 +110,7 @@ func TestStatusPendingUntilGranted(t *testing.T) {
 	}
 	a := hooktypes.Answers{Sound: "Glass", ClickToFocus: true}
 	setOwned(t, f, hooktypes.Finished, a)
-	have := map[perms.ID]perms.Status{perms.Notifications: perms.Granted, perms.AutomationTerminal: perms.NotAsked}
+	have := map[perms.ID]perms.Status{perms.AutomationTerminal: perms.NotAsked}
 
 	r := Build(f, nil, emptyStore(), have)
 	h := hookView(t, r, hooktypes.Finished)
@@ -222,7 +222,7 @@ func TestJSONIsCamelCase(t *testing.T) {
 		t.Fatal(err)
 	}
 	setOwned(t, f, hooktypes.Finished, hooktypes.Answers{Sound: "Glass", ClickToFocus: true})
-	r := Build(f, nil, emptyStore(), map[perms.ID]perms.Status{perms.Notifications: perms.Granted})
+	r := Build(f, nil, emptyStore(), map[perms.ID]perms.Status{perms.AutomationTerminal: perms.NotAsked})
 	var buf bytes.Buffer
 	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)

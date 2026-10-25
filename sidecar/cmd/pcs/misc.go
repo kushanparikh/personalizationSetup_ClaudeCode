@@ -40,8 +40,6 @@ func cmdPerm(args []string) (any, error) {
 		s := perms.RequestAutomation(terminalBundleID)
 		slog.Default().Info("permission request", "id", *id, "status", s)
 		return map[string]any{"status": s}, nil
-	case perms.Notifications:
-		return nil, errors.New("notifications are requested by the app")
 	}
 	return nil, fmt.Errorf("unknown permission %q", *id)
 }

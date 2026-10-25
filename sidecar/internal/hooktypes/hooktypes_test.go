@@ -84,8 +84,8 @@ func TestNeeds(t *testing.T) {
 		a    Answers
 		want []perms.ID
 	}{
-		{Finished, Answers{Sound: "Glass", ClickToFocus: true}, []perms.ID{perms.Notifications, perms.AutomationTerminal}},
-		{Finished, Answers{Sound: "Glass"}, []perms.ID{perms.Notifications}},
+		{Finished, Answers{Sound: "Glass", ClickToFocus: true}, []perms.ID{perms.AutomationTerminal}},
+		{Finished, Answers{Sound: "Glass"}, []perms.ID{}},
 		{InputNeeded, Answers{Sound: "Ping", ClickToFocus: true}, []perms.ID{perms.AutomationTerminal}},
 		{GitStatus, Answers{UntrackedDirty: true}, []perms.ID{}},
 	}
@@ -145,5 +145,15 @@ func TestParseCommandEdgeCases(t *testing.T) {
 	p, ok := ParseCommand("~/.pcs/bin/pcs-hook hook stop --sound")
 	if !ok || p.Type != Finished || p.Answers.Sound != "" {
 		t.Errorf("%+v ok=%v", p, ok)
+	}
+}
+
+func TestNeedsFinishedNoNotifications(t *testing.T) {
+	got := Needs(Finished, Answers{Sound: "Glass", ClickToFocus: true})
+	if !reflect.DeepEqual(got, []perms.ID{perms.AutomationTerminal}) {
+		t.Errorf("click-to-focus: got %#v", got)
+	}
+	if got := Needs(Finished, Answers{Sound: "Glass"}); len(got) != 0 {
+		t.Errorf("no focus: got %#v", got)
 	}
 }
