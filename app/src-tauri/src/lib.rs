@@ -2,6 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
+pub mod commands;
+pub mod sidecar;
+
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use tauri_plugin_log::{Target, TargetKind};
 use tauri_plugin_shell::{process::Command, ShellExt};
@@ -97,6 +100,18 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_shell::init())
+        .manage(commands::WriteLock(tokio::sync::Mutex::new(())))
+        .invoke_handler(tauri::generate_handler![
+            commands::get_state,
+            commands::apply_hook,
+            commands::enable_hook,
+            commands::disable_hook,
+            commands::remove_hook,
+            commands::request_permission,
+            commands::send_test,
+            commands::open_settings,
+            commands::open_log,
+        ])
         .setup(move |app| {
             log::info!("starting (background={background})");
             tauri::async_runtime::spawn(install_launcher(app.handle().clone()));
