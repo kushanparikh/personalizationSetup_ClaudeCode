@@ -12,7 +12,7 @@ use crate::sidecar::{hook_args, run_pcs};
 /// Serializes the commands that write config (settings.json, ~/.pcs).
 pub struct WriteLock(pub Mutex<()>);
 
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(30);
+const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
 const PERM_TIMEOUT: Duration = Duration::from_secs(120);
 const PERM_ID: &str = "automation-terminal";
 const SETTINGS_PREFIX: &str = "x-apple.systempreferences:";
