@@ -25,7 +25,16 @@ if [ ! -d "$BUILT" ]; then
   exit 1
 fi
 
-is_running() { pgrep -xf "$DEST_BIN" >/dev/null 2>&1; }
+# Print PIDs whose command is exactly the installed binary (with or without args).
+running_pids() {
+  local pid cmd
+  while read -r pid cmd; do
+    if [[ "$cmd" == "$DEST_BIN" || "$cmd" == "$DEST_BIN "* ]]; then
+      echo "$pid"
+    fi
+  done < <(ps -axo pid=,command=)
+}
+is_running() { [ -n "$(running_pids)" ]; }
 
 echo "==> Quitting any running copy"
 osascript -e 'quit app "Personalization Setup"' >/dev/null 2>&1 || true
@@ -35,13 +44,17 @@ for _ in $(seq 1 25); do
 done
 if is_running; then
   echo "    still running; killing $DEST_BIN"
-  pkill -xf "$DEST_BIN" || true
+  for pid in $(running_pids); do kill "$pid" 2>/dev/null || true; done
   sleep 1
+  if is_running; then
+    echo "ERROR: $DEST_BIN is still running; not replacing the bundle" >&2
+    exit 1
+  fi
 fi
 
 echo "==> Installing to $DEST"
 mkdir -p "$DEST_DIR"
-if [ -e "$DEST" ]; then
+if [ -e "$DEST" ] || [ -L "$DEST" ]; then
   rm -rf "$HOME/Applications/Personalization Setup.app"
 fi
 ditto "$BUILT" "$DEST"
