@@ -1,10 +1,11 @@
 import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+import { svelteTesting } from "@testing-library/svelte/vite";
 
 const host = process.env.TAURI_DEV_HOST;
 
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte(), svelteTesting()],
   clearScreen: false,
   build: {
     rollupOptions: {
@@ -20,5 +21,7 @@ export default defineConfig({
   },
   test: {
     passWithNoTests: true,
+    environment: "jsdom",
+    setupFiles: ["src/test/setup.ts"],
   },
 });

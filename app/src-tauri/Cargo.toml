@@ -22,6 +22,11 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "time"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Same versions tauri already pulls in, so there is one copy of each.
+objc2 = "=0.6.5"
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSResponder", "NSWindow"] }
+
 [profile.release]
 codegen-units = 1
 lto = true

@@ -2,16 +2,15 @@
 
 use std::path::{Path, PathBuf};
 
-// used by alerts (Task 6)
-#[allow(dead_code)]
+pub mod alerts;
 mod board;
 pub mod commands;
 pub mod events;
-// used by alerts (Task 6)
-#[allow(dead_code)]
 mod layout;
+mod macos;
 pub mod serve;
 pub mod sidecar;
+mod sound;
 
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use tauri_plugin_log::{Target, TargetKind};
@@ -109,6 +108,7 @@ pub fn run() {
         )
         .plugin(tauri_plugin_shell::init())
         .manage(commands::WriteLock(tokio::sync::Mutex::new(())))
+        .manage(alerts::Alerts::default())
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::apply_hook,
@@ -120,13 +120,16 @@ pub fn run() {
             commands::open_settings,
             commands::open_log,
             serve::serve_status,
+            alerts::alert_get,
+            alerts::alert_click,
+            alerts::alert_dismiss,
         ])
         .setup(move |app| {
             log::info!("starting (background={background})");
             tauri::async_runtime::spawn(install_launcher(app.handle().clone()));
-            // Task 6 replaces this logging-only handler with alerts::handle.
-            serve::start(app.handle().clone(), |_app, line| {
+            serve::start(app.handle().clone(), |app, line| {
                 log::info!("serve line: {line:?}");
+                alerts::handle(app, line);
             });
             if !background {
                 show_main(app.handle());
