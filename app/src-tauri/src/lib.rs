@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 
 pub mod commands;
+pub mod events;
+pub mod serve;
 pub mod sidecar;
 
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
@@ -111,10 +113,15 @@ pub fn run() {
             commands::send_test,
             commands::open_settings,
             commands::open_log,
+            serve::serve_status,
         ])
         .setup(move |app| {
             log::info!("starting (background={background})");
             tauri::async_runtime::spawn(install_launcher(app.handle().clone()));
+            // Task 6 replaces this logging-only handler with alerts::handle.
+            serve::start(app.handle().clone(), |_app, line| {
+                log::info!("serve line: {line:?}");
+            });
             if !background {
                 show_main(app.handle());
             }
