@@ -3,6 +3,8 @@
   import type { PendingItem } from "../lib/types";
 
   let { store, item }: { store: AppStore; item: PendingItem } = $props();
+  // macOS lists an app under Automation only after it has asked once, so Settings can't help yet.
+  let canAsk = $derived(item.status === "not-asked" || item.status === "unknown");
 </script>
 
 <article class="detail">
@@ -14,14 +16,21 @@
     </div>
   </header>
 
-  {#if item.steps}
+  {#if canAsk}
+    <p class="steps">macOS hasn't asked about this yet. Click Ask for permission, then choose Allow.</p>
+  {:else if item.steps}
     <p class="steps">{item.steps}</p>
   {/if}
 
   <p class="affects">Affects: {item.affects.join(", ")}</p>
 
   <div class="actions">
-    <button type="button" class="btn primary" onclick={() => store.openSettings(item.settingsUrl)}>Open Settings</button>
+    {#if canAsk}
+      <button type="button" class="btn primary" disabled={store.busy} onclick={() => store.askPermission(item.id)}>Ask for permission</button>
+      <button type="button" class="btn" onclick={() => store.openSettings(item.settingsUrl)}>Open Settings</button>
+    {:else}
+      <button type="button" class="btn primary" onclick={() => store.openSettings(item.settingsUrl)}>Open Settings</button>
+    {/if}
   </div>
   <p class="hint">Come back to this window when you're done. It checks again automatically.</p>
 </article>
@@ -66,6 +75,8 @@
   }
   .actions {
     margin-top: 22px;
+    display: flex;
+    gap: 8px;
   }
   .hint {
     margin: 10px 0 0;

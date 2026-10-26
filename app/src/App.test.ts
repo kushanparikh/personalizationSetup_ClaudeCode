@@ -165,6 +165,24 @@ describe("App", () => {
     expect(calls.find((c) => c.cmd === "open_settings")?.args).toEqual({ url: rep.pending[0].settingsUrl });
   });
 
+  it("pending_not_asked_offers_the_prompt", async () => {
+    const rep = fixture();
+    const granted = fixture({ pending: [] });
+    rep.pending[0].status = "not-asked";
+    let asked = false;
+    const calls = setup(rep, {
+      request_permission: () => ((asked = true), { status: "granted" }),
+      get_state: () => (asked ? granted : rep),
+    });
+    await myHooks();
+    await fireEvent.click(within(screen.getByRole("list", { name: "Pending" })).getByText("Let the app control Terminal"));
+    expect(await screen.findByText("macOS hasn't asked about this yet. Click Ask for permission, then choose Allow.")).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Ask for permission" }));
+    await waitFor(() => expect(count(calls, "request_permission")).toBe(1));
+    expect(calls.find((c) => c.cmd === "request_permission")?.args).toEqual({ id: "automation-terminal" });
+    await waitFor(() => expect(screen.queryByRole("list", { name: "Pending" })).toBeNull());
+  });
+
   it("settings_error_disables_writes", async () => {
     const calls = setup(fixture({ settingsError: "expected value at line 3 column 1" }));
     expect(

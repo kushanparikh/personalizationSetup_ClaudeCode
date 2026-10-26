@@ -97,6 +97,14 @@ export class AppStore {
     });
   }
 
+  /** Shows the macOS prompt for a permission it has not asked about yet, then re-reads state. */
+  askPermission(id: PermId): Promise<void> {
+    return this.run(async () => {
+      await api.requestPermission(id);
+      this.report = await api.state();
+    });
+  }
+
   openSettings(url: string): Promise<void> {
     return this.run(() => api.openSettings(url));
   }
