@@ -29,7 +29,14 @@ printf '=== install.sh %s ===\n' "$(date '+%Y-%m-%d %H:%M:%S')" >>"$LOG_DIR/inst
 exec > >(tee -a "$LOG_DIR/install.log") 2>&1
 
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pcs-install.XXXXXX")"
-trap 'rm -rf "$TMP"' EXIT
+DEST="$(app_dest)"; NEW="$(app_new_dest)"; OLD="$(app_old_dest)"
+# On any exit: put the old bundle back if the swap stopped half-way, then
+# remove the staging and set-aside copies.
+cleanup() {
+  if [ ! -e "$DEST" ] && [ -d "$OLD" ]; then mv "$OLD" "$DEST" 2>/dev/null || true; fi
+  rm -rf "$TMP" "$NEW" "$OLD"
+}
+trap cleanup EXIT
 
 # 1. macOS 13 or later
 major="$(sw_vers -productVersion | cut -d. -f1)"
@@ -73,8 +80,12 @@ if [ -n "$ZIP_ARG" ]; then
     echo "Couldn't find $ZIP_ARG."
     exit 1
   fi
+  if [ ! -f "$ZIP_ARG.sha256" ]; then
+    echo "Missing $(basename "$ZIP_ARG").sha256 next to the zip. Download both files from the Releases page."
+    exit 1
+  fi
   cp "$ZIP_ARG" "$ZIP"
-  [ -f "$ZIP_ARG.sha256" ] && cp "$ZIP_ARG.sha256" "$ZIP.sha256"
+  cp "$ZIP_ARG.sha256" "$ZIP.sha256"
   got=1
 else
   if command -v gh >/dev/null 2>&1 && gh auth status >/dev/null 2>&1; then
@@ -99,38 +110,48 @@ else
   fi
 fi
 
-# 4. Verify
-if [ -f "$ZIP.sha256" ]; then
-  if ! (cd "$TMP" && shasum -a 256 -c "$ASSET.sha256" >/dev/null 2>&1); then
-    echo "The download is corrupt (checksum mismatch). Nothing was installed."
-    exit 1
-  fi
-elif [ -z "$ZIP_ARG" ]; then
+# 4. Verify (a .sha256 is always required). Compare only the hash, so a zip the
+# browser renamed ("... (1).zip") still verifies.
+want_sum="$(awk 'NR == 1 { print tolower($1) }' "$ZIP.sha256" 2>/dev/null || true)"
+have_sum="$(shasum -a 256 "$ZIP" | awk '{ print $1 }')"
+if [ -z "$want_sum" ] || [ "$want_sum" != "$have_sum" ]; then
   echo "The download is corrupt (checksum mismatch). Nothing was installed."
   exit 1
 fi
+# The checksum passed, so drop the browser's quarantine (D41): --noqtn on the
+# extract keeps it off every file (a plain ditto copy would carry it over).
 mkdir -p "$TMP/x"
-if ! ditto -x -k "$ZIP" "$TMP/x" 2>/dev/null || [ ! -e "$TMP/x/$APP_NAME.app/Contents/MacOS/pcs" ]; then
+if ! ditto --noqtn -x -k "$ZIP" "$TMP/x" 2>/dev/null || [ ! -e "$TMP/x/$APP_NAME.app/Contents/MacOS/pcs" ]; then
   echo "The download doesn't contain the app. Nothing was installed."
   exit 1
 fi
 
-# 5. One-time settings backup
+# 5. One-time settings backup, only while the settings are still free of the
+# app's hooks (otherwise restoring it would bring back hooks that call a
+# launcher uninstall has removed).
 SETTINGS="$HOME/.claude/settings.json"
 if [ -f "$SETTINGS" ] && [ ! -e "$SETTINGS.pcs-original" ]; then
-  cp -p "$SETTINGS" "$SETTINGS.pcs-original"
-  echo "Saved a copy of your current Claude Code settings: ~/.claude/settings.json.pcs-original"
+  if grep -qF "/.pcs/bin/pcs-hook" "$SETTINGS" 2>/dev/null || [ -e "$HOME/.pcs" ]; then
+    echo "Skipped saving an original settings copy: Personalization Setup's hooks are already in your settings."
+  else
+    cp -p "$SETTINGS" "$SETTINGS.pcs-original"
+    echo "Saved a copy of your current Claude Code settings: ~/.claude/settings.json.pcs-original"
+  fi
 fi
 
-# 6. Install
-DEST="$(app_dest)"
-if ! app_quit; then
-  echo "Couldn't quit the running app. Quit it and re-run."
-  exit 1
-fi
+# 6. Install. Stage the new bundle next to the old one, then swap with two
+# renames, so a hook that relaunches the app never sees a half-copied bundle.
+quit_failed() { echo "Couldn't quit the running app. Quit it and re-run."; exit 1; }
 mkdir -p "$HOME/Applications"
-rm -rf "$DEST"
-ditto "$TMP/x/$APP_NAME.app" "$DEST"
+rm -rf "$NEW" "$OLD"
+ditto --noqtn "$TMP/x/$APP_NAME.app" "$NEW"
+app_quit || quit_failed
+[ -e "$DEST" ] && mv "$DEST" "$OLD"
+mv "$NEW" "$DEST"
+# A hook may have relaunched the old app between the quit and the swap; its
+# process shows the installed path (or the set-aside path). Quit it too.
+app_quit "$DEST" "$OLD" || quit_failed
+rm -rf "$OLD"
 
 # 7. Launch
 open "$DEST" || true
@@ -152,7 +173,7 @@ if [ "$ok" -eq 1 ]; then
   exit 0
 fi
 if xattr -p com.apple.quarantine "$DEST" >/dev/null 2>&1; then
-  echo 'macOS blocked the app. Open System Settings → Privacy & Security, click "Open Anyway" for Personalization Setup, then re-run ./install.sh.'
+  echo 'macOS blocked the app. Open System Settings → Privacy & Security, click "Open Anyway" for Personalization Setup, then run the same ./install.sh command again.'
 else
   echo "The app didn't start. Open it from ~/Applications to see the error, and check the log: ~/Library/Logs/Personalization Setup/app.log"
 fi

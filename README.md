@@ -22,17 +22,17 @@ Options:
 
 | Flag | Meaning |
 | --- | --- |
-| `--zip <file>` | Install from a downloaded `Personalization-Setup-macos.zip` instead of downloading |
+| `--zip <file>` | Install from a downloaded `Personalization-Setup-macos.zip` instead of downloading. The matching `.sha256` file must be next to it |
 | `--version vX.Y.Z` | Install a specific release instead of the latest |
 | `--install-claude` | Install Claude Code if it is missing, without asking |
 
 Exit codes: `0` installed and launched; `1` a prerequisite, download or check failed (nothing installed); `2` installed, but the app did not start.
 
-The first time it runs, the installer saves a copy of your Claude Code settings to `~/.claude/settings.json.pcs-original`.
+The first time it runs, the installer saves a copy of your Claude Code settings to `~/.claude/settings.json.pcs-original`. It skips this when the settings already contain Personalization Setup's hooks (or `~/.pcs` exists), because then the copy wouldn't be the original.
 
-**Private repository.** If the download fails, install GitHub CLI (`brew install gh`), run `gh auth login`, and re-run. Or download `Personalization-Setup-macos.zip` from the Releases page and run `./install.sh --zip <file>`.
+**Private repository.** If the download fails, install GitHub CLI (`brew install gh`), run `gh auth login`, and re-run. Or download `Personalization-Setup-macos.zip` and `Personalization-Setup-macos.zip.sha256` from the Releases page into the same folder and run `./install.sh --zip <file>`. After the checksum passes, the installer removes the browser's quarantine flag from the app.
 
-**First launch.** The app is not signed with an Apple Developer ID, so macOS may block it. Open System Settings, go to Privacy & Security, click **Open Anyway** for Personalization Setup, then run `./install.sh` again.
+**First launch.** The app is not signed with an Apple Developer ID, so macOS may block it. Open System Settings, go to Privacy & Security, click **Open Anyway** for Personalization Setup, then run the same `./install.sh` command again (with `--zip <file>` if you used it).
 
 ## Using the app
 

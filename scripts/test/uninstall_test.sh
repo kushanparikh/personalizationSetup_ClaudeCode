@@ -139,3 +139,22 @@ t_uninstall_bad_arg_exits_1() {
   assert_eq 1 "$UNI_RC" "exit"
   assert_contains "$UNI_OUT" "Usage: ./uninstall.sh [--yes]"
 }
+
+# A hook relaunches the app while pcs removes the hooks: the new copy rewrites
+# ~/.pcs/bin/pcs-hook after pcs deleted it. uninstall must stop it and delete it.
+t_uninstall_hook_relaunch_during_uninstall() {
+  uni_setup
+  uni_install_app '. "$REPO_ROOT/scripts/test/fixtures.sh"
+rm -rf "$HOME/.pcs"
+fake_start_and_wait "$HOME/Applications/Personalization Setup.app" >"$HOME/relaunch.pid"
+i=0; while [ ! -f "$HOME/.pcs/bin/pcs-hook" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+echo "{\"removedHooks\":1,\"backup\":\"\"}"'
+  uni_run --yes
+  assert_eq 0 "$UNI_RC" "exit: $UNI_OUT"
+  local rp; rp="$(cat "$HOME/relaunch.pid")"
+  [ -n "$rp" ] || fail "relaunch did not start"
+  ! kill -0 "$rp" 2>/dev/null || fail "relaunched copy still running"
+  [ -z "$(app_pids)" ] || fail "app still running"
+  assert_no_file "$HOME/.pcs/bin/pcs-hook"
+  [ ! -e "$(app_dest)" ] || fail "app still present"
+}

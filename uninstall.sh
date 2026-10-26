@@ -66,6 +66,14 @@ echo "Removed ${n:-0} hook(s)."
 [ -n "$backup" ] && echo "Backup of your settings: $backup"
 
 rm -rf "$DEST"
+# A hook may have relaunched the app since the first quit, and that copy
+# rewrites ~/.pcs/bin/pcs-hook at start. pcs succeeded, so it had deleted
+# ~/.pcs: stop the copy, then delete the launcher it wrote again.
+app_quit "$DEST" "$(app_old_dest)" || echo "A copy of Personalization Setup is still running. Quit it from the menu bar."
+if [ -e "$HOME/.pcs/bin/pcs-hook" ]; then
+  rm -f "$HOME/.pcs/bin/pcs-hook"
+  rmdir "$HOME/.pcs/bin" "$HOME/.pcs" 2>/dev/null || true
+fi
 if [ -f "$HOME/.claude/settings.json.pcs-original" ]; then
   echo "Uninstalled. Your original settings copy is still at ~/.claude/settings.json.pcs-original"
 else

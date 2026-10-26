@@ -5,39 +5,49 @@
 APP_NAME="Personalization Setup"
 
 app_dest() { printf '%s\n' "$HOME/Applications/$APP_NAME.app"; }
+# Staging and set-aside paths used while an upgrade swaps bundles (same volume,
+# so both moves are renames).
+app_new_dest() { printf '%s\n' "$HOME/Applications/.$APP_NAME.app.new"; }
+app_old_dest() { printf '%s\n' "$HOME/Applications/.$APP_NAME.app.old"; }
 
-# Print PIDs whose command is exactly the installed binary (with or without args).
+# app_pids [bundle...]: print PIDs whose command is exactly a bundle's binary
+# (with or without args). Default bundle: the installed one.
 app_pids() {
-  local bin pid cmd
-  bin="$(app_dest)/Contents/MacOS/personalization-setup"
+  local b bin pid cmd
+  [ $# -gt 0 ] || set -- "$(app_dest)"
   ps -axo pid=,command= | while read -r pid cmd; do
-    if [ "$cmd" = "$bin" ] || [ "${cmd#"$bin "}" != "$cmd" ]; then
-      echo "$pid"
-    fi
+    for b in "$@"; do
+      bin="$b/Contents/MacOS/personalization-setup"
+      if [ "$cmd" = "$bin" ] || [ "${cmd#"$bin "}" != "$cmd" ]; then
+        echo "$pid"; break
+      fi
+    done
   done
 }
 
-# Ask the app to quit, wait up to PCS_QUIT_TIMEOUT seconds, then kill the exact
-# PIDs. Returns 1 if the app is still running afterwards.
+# app_quit [bundle...]: ask the app to quit, wait up to PCS_QUIT_TIMEOUT
+# seconds, then kill the exact PIDs of those bundles' binaries (default: the
+# installed one). Returns 1 if any is still running afterwards.
 app_quit() {
   local timeout="${PCS_QUIT_TIMEOUT:-10}" i pid
+  [ $# -gt 0 ] || set -- "$(app_dest)"
   osascript -e "quit app \"$APP_NAME\"" >/dev/null 2>&1 || true
   i=0
   while [ "$i" -lt $((timeout * 5)) ]; do
-    [ -z "$(app_pids)" ] && return 0
+    [ -z "$(app_pids "$@")" ] && return 0
     sleep 0.2
     i=$((i + 1))
   done
-  [ -z "$(app_pids)" ] && return 0
-  echo "    still running; killing $(app_dest)/Contents/MacOS/personalization-setup" >&2
-  for pid in $(app_pids); do kill "$pid" 2>/dev/null || true; done
+  [ -z "$(app_pids "$@")" ] && return 0
+  echo "    still running; killing PID(s) $(app_pids "$@" | tr '\n' ' ')" >&2
+  for pid in $(app_pids "$@"); do kill "$pid" 2>/dev/null || true; done
   i=0
   while [ "$i" -lt 5 ]; do
-    [ -z "$(app_pids)" ] && return 0
+    [ -z "$(app_pids "$@")" ] && return 0
     sleep 0.2
     i=$((i + 1))
   done
-  [ -z "$(app_pids)" ]
+  [ -z "$(app_pids "$@")" ]
 }
 
 # Succeeds when the launcher the app writes points at this app's bundled pcs.

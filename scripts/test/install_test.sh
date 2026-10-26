@@ -98,6 +98,7 @@ t_install_zip_without_app_exits_1() {
   inst_setup; inst_with_claude
   mkdir -p "$TEST_TMP/empty/Other.app"
   (cd "$TEST_TMP/empty" && ditto -c -k --keepParent Other.app "$TEST_TMP/rel/z.zip")
+  (cd "$TEST_TMP/rel" && shasum -a 256 z.zip >z.zip.sha256)
   inst_run --zip "$TEST_TMP/rel/z.zip"
   assert_eq 1 "$INST_RC" "exit"
   assert_contains "$INST_OUT" "The download doesn't contain the app. Nothing was installed."
@@ -144,7 +145,7 @@ t_install_launch_failure_quarantine_message() {
   make_fake_release "$TEST_TMP/rel" v1 exit
   inst_run --zip "$TEST_TMP/rel/Personalization-Setup-macos.zip"
   assert_eq 2 "$INST_RC" "exit"
-  assert_contains "$INST_OUT" 'macOS blocked the app. Open System Settings → Privacy & Security, click "Open Anyway" for Personalization Setup, then re-run ./install.sh.'
+  assert_contains "$INST_OUT" 'macOS blocked the app. Open System Settings → Privacy & Security, click "Open Anyway" for Personalization Setup, then run the same ./install.sh command again.'
 }
 
 t_install_launch_failure_without_quarantine() {
@@ -197,4 +198,116 @@ cp "'"$TEST_TMP"'/rel/Personalization-Setup-macos.zip" "$out"'
   inst_run
   assert_eq 1 "$INST_RC" "exit"
   assert_no_file "$HOME/Applications"
+}
+
+# A hook fires right after the first quit and relaunches the old bundle: the
+# stub `mv`/`rm` start the old app the first time they touch the installed path
+# after a quit. osascript "quit" kills every copy, like quitting by app name.
+t_install_hook_relaunch_during_upgrade() {
+  inst_setup; inst_with_claude
+  make_fake_release "$TEST_TMP/rel" v1
+  inst_run --zip "$TEST_TMP/rel/Personalization-Setup-macos.zip"
+  assert_eq 0 "$INST_RC" "first install: $INST_OUT"
+  make_fake_release "$TEST_TMP/rel" v2
+  stub osascript '. "$REPO_ROOT/scripts/test/fixtures.sh"; fake_kill_all
+[ -e "$HOME/relaunch.fired" ] || touch "$HOME/relaunch.armed"'
+  local relaunch='. "$REPO_ROOT/scripts/test/fixtures.sh"
+if [ -e "$HOME/relaunch.armed" ] && [ ! -e "$HOME/relaunch.fired" ]; then
+  for a in "$@"; do
+    if [ "$a" = "$HOME/Applications/Personalization Setup.app" ] && [ -d "$a" ]; then
+      touch "$HOME/relaunch.fired"; fake_start_and_wait "$a" >"$HOME/relaunch.pid"; break
+    fi
+  done
+fi'
+  stub mv "$relaunch"'
+exec /bin/mv "$@"'
+  stub rm "$relaunch"'
+exec /bin/rm "$@"'
+  inst_run --zip "$TEST_TMP/rel/Personalization-Setup-macos.zip"
+  assert_eq 0 "$INST_RC" "upgrade: $INST_OUT"
+  assert_file "$HOME/relaunch.fired"
+  local rp; rp="$(cat "$HOME/relaunch.pid")"
+  [ -n "$rp" ] || fail "relaunch did not start"
+  assert_eq v1 "$(fake_marker_of "$rp")" "relaunched copy"
+  ! kill -0 "$rp" 2>/dev/null || fail "relaunched old copy still running"
+  local now; now="$(app_pids)"
+  assert_eq 1 "$(echo "$now" | grep -c .)" "number of running copies"
+  assert_eq v2 "$(fake_marker_of "$now")" "running copy"
+  assert_eq v2 "$(inst_marker)"
+  assert_no_file "$HOME/Applications/.Personalization Setup.app.old"
+  assert_no_file "$HOME/Applications/.Personalization Setup.app.new"
+}
+
+t_install_quit_failure_cleans_staging() {
+  inst_setup; inst_with_claude
+  make_fake_release "$TEST_TMP/rel" v1
+  inst_run --zip "$TEST_TMP/rel/Personalization-Setup-macos.zip"
+  assert_eq 0 "$INST_RC" "first install: $INST_OUT"
+  inst_cleanup
+  mkdir -p "$HOME/Applications/.Personalization Setup.app.new/stale"
+  # A copy that ignores SIGTERM, so app_quit fails.
+  (trap '' TERM; exec -a "$(app_dest)/Contents/MacOS/personalization-setup" /bin/sleep 30) &
+  local stuck=$!
+  trap 'kill -9 '"$stuck"' 2>/dev/null || true; inst_cleanup' EXIT
+  local i=0
+  while [ -z "$(app_pids)" ] && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+  make_fake_release "$TEST_TMP/rel" v2
+  inst_run --zip "$TEST_TMP/rel/Personalization-Setup-macos.zip"
+  assert_eq 1 "$INST_RC" "exit: $INST_OUT"
+  assert_contains "$INST_OUT" "Couldn't quit the running app. Quit it and re-run."
+  assert_eq v1 "$(inst_marker)"
+  assert_no_file "$HOME/Applications/.Personalization Setup.app.new"
+  assert_no_file "$HOME/Applications/.Personalization Setup.app.old"
+}
+
+t_install_zip_requires_sha256() {
+  inst_setup; inst_with_claude
+  make_fake_release "$TEST_TMP/rel" v1
+  rm -f "$TEST_TMP/rel/Personalization-Setup-macos.zip.sha256"
+  inst_run --zip "$TEST_TMP/rel/Personalization-Setup-macos.zip"
+  assert_eq 1 "$INST_RC" "exit"
+  assert_contains "$INST_OUT" "Missing Personalization-Setup-macos.zip.sha256 next to the zip. Download both files from the Releases page."
+  assert_no_file "$HOME/Applications"
+}
+
+# Browsers rename repeat downloads ("... (1).zip"); the checksum still matches.
+t_install_zip_renamed_still_verifies() {
+  inst_setup; inst_with_claude
+  make_fake_release "$TEST_TMP/rel" v1
+  mv "$TEST_TMP/rel/Personalization-Setup-macos.zip" "$TEST_TMP/rel/dl (1).zip"
+  mv "$TEST_TMP/rel/Personalization-Setup-macos.zip.sha256" "$TEST_TMP/rel/dl (1).zip.sha256"
+  inst_run --zip "$TEST_TMP/rel/dl (1).zip"
+  assert_eq 0 "$INST_RC" "exit: $INST_OUT"
+  echo tampered >>"$TEST_TMP/rel/dl (1).zip"
+  inst_run --zip "$TEST_TMP/rel/dl (1).zip"
+  assert_eq 1 "$INST_RC" "tampered exit"
+  assert_contains "$INST_OUT" "The download is corrupt (checksum mismatch). Nothing was installed."
+}
+
+t_install_clears_quarantine_after_checksum() {
+  inst_setup; inst_with_claude
+  make_fake_release "$TEST_TMP/rel" v1
+  xattr -w com.apple.quarantine '0081;00000000;Safari;' "$TEST_TMP/rel/Personalization-Setup-macos.zip"
+  inst_run --zip "$TEST_TMP/rel/Personalization-Setup-macos.zip"
+  assert_eq 0 "$INST_RC" "exit: $INST_OUT"
+  ! xattr -p com.apple.quarantine "$(app_dest)" >/dev/null 2>&1 || fail "bundle still quarantined"
+  ! xattr -p com.apple.quarantine "$(app_dest)/Contents/MacOS/personalization-setup" >/dev/null 2>&1 || fail "binary still quarantined"
+}
+
+t_install_original_backup_skips_when_app_hooks_present() {
+  inst_setup; inst_with_claude
+  mkdir -p "$HOME/.claude"
+  echo '{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"'"$HOME"'/.pcs/bin/pcs-hook stop"}]}]}}' >"$HOME/.claude/settings.json"
+  make_fake_release "$TEST_TMP/rel" v1
+  inst_run --zip "$TEST_TMP/rel/Personalization-Setup-macos.zip"
+  assert_eq 0 "$INST_RC" "exit: $INST_OUT"
+  assert_contains "$INST_OUT" "Skipped saving an original settings copy: Personalization Setup's hooks are already in your settings."
+  assert_no_file "$HOME/.claude/settings.json.pcs-original"
+  # ~/.pcs existing (the app ran before) also means the settings aren't original.
+  inst_cleanup
+  echo '{"plain":1}' >"$HOME/.claude/settings.json"
+  inst_run --zip "$TEST_TMP/rel/Personalization-Setup-macos.zip"
+  assert_eq 0 "$INST_RC" "second: $INST_OUT"
+  assert_contains "$INST_OUT" "Skipped saving an original settings copy"
+  assert_no_file "$HOME/.claude/settings.json.pcs-original"
 }
