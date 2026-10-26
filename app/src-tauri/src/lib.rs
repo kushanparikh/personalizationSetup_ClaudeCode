@@ -132,7 +132,7 @@ pub fn run() {
                 alerts::handle(app, line);
             });
             // No Dock icon, ever: a regular app's windows are kept off other
-            // apps' full-screen Spaces, and the alerts must show there (D39).
+            // apps' full-screen Spaces, and the alerts must show there.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             if !background {
