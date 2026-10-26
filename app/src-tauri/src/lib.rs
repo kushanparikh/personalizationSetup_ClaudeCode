@@ -64,18 +64,17 @@ fn build_tray(app: &tauri::App) -> tauri::Result<tauri::tray::TrayIcon> {
     let open = MenuItem::with_id(app, TRAY_OPEN, "Open Personalization Setup", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, TRAY_QUIT, "Quit Personalization Setup", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &PredefinedMenuItem::separator(app)?, &quit])?;
-    let mut builder = tauri::tray::TrayIconBuilder::new()
+    let builder = tauri::tray::TrayIconBuilder::new()
         .tooltip("Personalization Setup")
         .menu(&menu)
         .show_menu_on_left_click(true)
+        .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))?)
+        .icon_as_template(true)
         .on_menu_event(|app, event| match event.id().as_ref() {
             TRAY_OPEN => show_main(app),
             TRAY_QUIT => app.exit(0),
             _ => {}
         });
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-    }
     builder.build(app)
 }
 
