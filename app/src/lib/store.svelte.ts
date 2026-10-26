@@ -84,9 +84,11 @@ export class AppStore {
 
   remove(type: HookType): Promise<void> {
     if (this.blocked) return Promise.resolve();
+    const name = this.report?.hooks.find((h) => h.type === type)?.name ?? type;
     return this.run(async () => {
       this.report = await api.remove(type);
       this.selection = { kind: "none" };
+      this.notice = `Removed ${name}. Your settings.json was backed up first.`;
     });
   }
 
