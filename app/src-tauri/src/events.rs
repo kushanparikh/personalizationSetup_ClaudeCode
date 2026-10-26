@@ -36,7 +36,9 @@ pub enum ServeLine {
     Ready,
     Toast(Alert),
     Panel(Alert),
-    MovedOn(String),
+    /// A session moved on; `cause` is the Claude Code hook event behind it
+    /// (for example "Stop"), empty when absent.
+    MovedOn { session_id: String, cause: String },
     Error(String),
 }
 
@@ -53,11 +55,14 @@ pub fn parse_line(line: &str) -> Option<ServeLine> {
     if kind == "ready" {
         return Some(ServeLine::Ready);
     }
+    let cause = v.get("cause").and_then(Value::as_str).unwrap_or_default().to_string();
     let alert: Alert = serde_json::from_value(v).ok()?;
     match kind.as_str() {
         "toast" => Some(ServeLine::Toast(alert)),
         "panel" if !alert.session_id.is_empty() => Some(ServeLine::Panel(alert)),
-        "moved_on" if !alert.session_id.is_empty() => Some(ServeLine::MovedOn(alert.session_id)),
+        "moved_on" if !alert.session_id.is_empty() => {
+            Some(ServeLine::MovedOn { session_id: alert.session_id, cause })
+        }
         _ => None,
     }
 }
@@ -102,7 +107,11 @@ mod tests {
     fn parse_moved_on() {
         assert_eq!(
             parse_line(r#"{"v":1,"kind":"moved_on","sessionId":"s1","focus":false}"#),
-            Some(ServeLine::MovedOn("s1".into()))
+            Some(ServeLine::MovedOn { session_id: "s1".into(), cause: String::new() })
+        );
+        assert_eq!(
+            parse_line(r#"{"v":1,"kind":"moved_on","sessionId":"s1","focus":false,"cause":"SessionEnd"}"#),
+            Some(ServeLine::MovedOn { session_id: "s1".into(), cause: "SessionEnd".into() })
         );
     }
 
@@ -125,7 +134,7 @@ mod tests {
         assert_eq!(parsed[0], ServeLine::Ready);
         assert!(matches!(&parsed[1], ServeLine::Toast(a) if a.message == "Finished working" && a.session_id.is_empty() && a.tone == "done"));
         assert!(matches!(&parsed[2], ServeLine::Panel(a) if a.session_id == "s1" && a.focus && a.tty == "/dev/ttys003" && a.bundle_id == "com.apple.Terminal" && a.tone == "wait"));
-        assert_eq!(parsed[3], ServeLine::MovedOn("s1".into()));
+        assert_eq!(parsed[3], ServeLine::MovedOn { session_id: "s1".into(), cause: "Stop".into() });
         assert_eq!(parsed[4], ServeLine::Error(crate::serve::ALREADY_RUNNING.into()));
     }
 

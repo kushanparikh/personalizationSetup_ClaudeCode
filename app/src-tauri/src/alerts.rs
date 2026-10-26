@@ -92,30 +92,38 @@ pub fn menu_opened(app: &AppHandle) {
 /// Entry point for `pcs serve` lines.
 pub fn handle(app: &AppHandle, line: ServeLine) {
     let a = app.clone();
-    type Step = Box<dyn FnOnce(&mut Status, &mut Board) -> Vec<Change> + Send>;
-    let run = move |f: Step| {
-        let app = a.clone();
-        if let Err(e) = a.run_on_main_thread(move || {
-            let changes = f(&mut status(&app), &mut board(&app));
-            apply(&app, changes);
-        }) {
-            log::error!("alerts: run_on_main_thread: {e}");
-        }
-    };
+    if matches!(line, ServeLine::Ready | ServeLine::Error(_)) {
+        return;
+    }
+    if let Err(e) = app.run_on_main_thread(move || {
+        let changes = step(&mut status(&a), &mut board(&a), line);
+        apply(&a, changes);
+    }) {
+        log::error!("alerts: run_on_main_thread: {e}");
+    }
+}
+
+/// Applies one serve line to the status light's memory and the board, and
+/// returns the window changes. Every moved_on closes that session's panel,
+/// but one caused by `Stop` never clears a finished session: a Stop is the
+/// session finishing, not the user going back to it.
+fn step(s: &mut Status, b: &mut Board, line: ServeLine) -> Vec<Change> {
     match line {
-        ServeLine::Panel(alert) => run(Box::new(move |s, b| {
+        ServeLine::Panel(alert) => {
             s.panel_opened(&alert.session_id);
             b.panel(alert)
-        })),
-        ServeLine::Toast(alert) => run(Box::new(move |s, b| {
+        }
+        ServeLine::Toast(alert) => {
             s.toast(&alert.session_id);
             b.toast(alert)
-        })),
-        ServeLine::MovedOn(sid) => run(Box::new(move |s, b| {
-            s.moved_on(&sid);
-            b.moved_on(&sid)
-        })),
-        ServeLine::Ready | ServeLine::Error(_) => {}
+        }
+        ServeLine::MovedOn { session_id, cause } => {
+            if cause != "Stop" {
+                s.moved_on(&session_id);
+            }
+            b.moved_on(&session_id)
+        }
+        ServeLine::Ready | ServeLine::Error(_) => Vec::new(),
     }
 }
 
@@ -299,6 +307,55 @@ pub fn alert_dismiss(app: AppHandle, label: String) {
 mod tests {
     use super::*;
     use crate::events::Alert;
+
+    use crate::status::Light;
+
+    fn toast(sid: &str) -> ServeLine {
+        ServeLine::Toast(Alert { session_id: sid.into(), message: "Finished working".into(), ..Alert::default() })
+    }
+
+    fn moved_on(sid: &str, cause: &str) -> ServeLine {
+        ServeLine::MovedOn { session_id: sid.into(), cause: cause.into() }
+    }
+
+    /// Runs the lines through `step` and returns the light, with the board
+    /// as it stands and again after every toast has faded.
+    fn light_after(lines: Vec<ServeLine>) -> (Light, Light) {
+        let (mut s, mut b) = (Status::default(), Board::default());
+        for l in lines {
+            step(&mut s, &mut b, l);
+        }
+        let now = s.light(b.open_panels(), b.sessionless_toasts());
+        (now, s.light(b.open_panels(), 0))
+    }
+
+    #[test]
+    fn toast_then_stop_moved_on_stays_green() {
+        assert_eq!(light_after(vec![toast("s1"), moved_on("s1", "Stop")]), (Light::Done, Light::Done));
+    }
+
+    #[test]
+    fn stop_moved_on_then_toast_stays_green() {
+        assert_eq!(light_after(vec![moved_on("s1", "Stop"), toast("s1")]), (Light::Done, Light::Done));
+    }
+
+    #[test]
+    fn user_prompt_moved_on_clears_green() {
+        assert_eq!(
+            light_after(vec![toast("s1"), moved_on("s1", "Stop"), moved_on("s1", "UserPromptSubmit")]),
+            (Light::None, Light::None)
+        );
+    }
+
+    #[test]
+    fn stop_moved_on_still_closes_panel() {
+        let (mut s, mut b) = (Status::default(), Board::default());
+        step(&mut s, &mut b, ServeLine::Panel(Alert { session_id: "s1".into(), ..Alert::default() }));
+        assert_eq!(b.open_panels(), 1);
+        let changes = step(&mut s, &mut b, moved_on("s1", "Stop"));
+        assert!(matches!(changes.as_slice(), [Change::Close(_)]), "{changes:?}");
+        assert_eq!(b.open_panels(), 0);
+    }
 
     #[test]
     fn alert_view_serialises_camel_case() {

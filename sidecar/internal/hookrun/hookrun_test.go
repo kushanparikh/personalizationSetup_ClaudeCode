@@ -135,12 +135,30 @@ func TestHookBadInput(t *testing.T) {
 
 func TestMovedOnNeverLaunches(t *testing.T) {
 	r := &rec{sendErr: errors.New("down")}
-	run(t, "moved-on", nil, `{"session_id":"s1"}`, r.deps(nil))
+	run(t, "moved-on", nil, `{"session_id":"s1","hook_event_name":"UserPromptSubmit"}`, r.deps(nil))
 	if r.launches[0] || r.ttyCalls != 0 || r.gitCalls != 0 {
 		t.Fatalf("launch=%v tty=%d", r.launches, r.ttyCalls)
 	}
 	e := r.events[0]
-	if e.Kind != ipc.KindMovedOn || e.SessionID != "s1" || e.Tone != "" || e.V != 1 {
+	if e.Kind != ipc.KindMovedOn || e.SessionID != "s1" || e.Cause != "UserPromptSubmit" || e.Tone != "" || e.V != 1 {
+		t.Fatalf("%+v", e)
+	}
+}
+
+func TestMovedOnCarriesStopCause(t *testing.T) {
+	r := &rec{}
+	run(t, "moved-on", nil, `{"session_id":"s1","hook_event_name":"Stop"}`, r.deps(nil))
+	if e := r.events[0]; e.Kind != ipc.KindMovedOn || e.Cause != "Stop" {
+		t.Fatalf("%+v", e)
+	}
+	r = &rec{}
+	run(t, "moved-on", nil, `{}`, r.deps(nil))
+	if e := r.events[0]; e.SessionID != "unknown" || e.Cause != "" {
+		t.Fatalf("%+v", e)
+	}
+	r = &rec{}
+	run(t, "moved-on", nil, `{"session_id":"s1","hook_event_name":"`+strings.Repeat("é", 50)+`"}`, r.deps(nil))
+	if e := r.events[0]; e.Cause != strings.Repeat("é", 40) || e.Validate() != nil {
 		t.Fatalf("%+v", e)
 	}
 }

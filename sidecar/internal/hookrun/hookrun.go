@@ -123,7 +123,7 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 		if id == "" {
 			id = "unknown"
 		}
-		send(d, log, ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: id}, false)
+		send(d, log, ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: id, Cause: cause(in.Event)}, false)
 	default:
 		log.Warn("unknown hook subcommand", "sub", sub)
 	}
@@ -177,6 +177,15 @@ func send(d Deps, log *slog.Logger, e ipc.Event, launch bool) {
 	if err := d.Send(e, launch); err != nil {
 		log.Warn("send failed", "kind", e.Kind, "err", err)
 	}
+}
+
+// cause trims the hook event name to what ipc.Event.Validate accepts, so an
+// odd name can never get the event dropped.
+func cause(ev string) string {
+	if r := []rune(ev); len(r) > 40 {
+		return string(r[:40])
+	}
+	return ev
 }
 
 func sound(s string) string {
