@@ -400,7 +400,7 @@ func TestUninstall(t *testing.T) {
 	e.fail("uninstall")
 
 	res := e.ok("uninstall", "--yes")
-	if n, _ := res["removedHooks"].(float64); n != 5 {
+	if n, _ := res["removedHooks"].(float64); n != 7 {
 		t.Fatalf("removedHooks = %v", res)
 	}
 	backup, _ := res["backup"].(string)

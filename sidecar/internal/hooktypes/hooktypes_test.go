@@ -21,9 +21,17 @@ func TestEntriesExact(t *testing.T) {
 		{"git clean", GitStatus, Answers{UntrackedDirty: false},
 			[]Entry{{"SessionStart", "", p + "session-start --untracked-clean", 10}}},
 		{"finished default", Finished, Answers{Sound: "Glass", ClickToFocus: true},
-			[]Entry{{"Stop", "", p + "stop --sound Glass --focus", 10}}},
+			[]Entry{
+				{"Stop", "", p + "stop --sound Glass --focus", 10},
+				{"UserPromptSubmit", "", p + "revisit", 5},
+				{"SessionEnd", "", p + "revisit", 5},
+			}},
 		{"finished none", Finished, Answers{Sound: "none", ClickToFocus: false},
-			[]Entry{{"Stop", "", p + "stop --sound none --no-focus", 10}}},
+			[]Entry{
+				{"Stop", "", p + "stop --sound none --no-focus", 10},
+				{"UserPromptSubmit", "", p + "revisit", 5},
+				{"SessionEnd", "", p + "revisit", 5},
+			}},
 		{"input default", InputNeeded, Answers{Sound: "Ping", ClickToFocus: true}, []Entry{
 			{"Notification", "permission_prompt|elicitation_dialog", p + "notification --sound Ping --focus", 10},
 			{"UserPromptSubmit", "", p + "moved-on", 5},
@@ -55,6 +63,10 @@ func TestParseCommandRoundTrip(t *testing.T) {
 	p, ok := ParseCommand("~/.pcs/bin/pcs-hook hook moved-on")
 	if !ok || p.Type != InputNeeded || p.Sub != "moved-on" || p.Answers != (Answers{}) {
 		t.Errorf("moved-on: %+v ok=%v", p, ok)
+	}
+	p, ok = ParseCommand("~/.pcs/bin/pcs-hook hook revisit")
+	if !ok || p.Type != Finished || p.Sub != "revisit" || p.Answers != (Answers{}) {
+		t.Errorf("revisit: %+v ok=%v", p, ok)
 	}
 	if _, ok := ParseCommand("~/.claude/hooks/notify-done.sh"); ok {
 		t.Error("foreign command parsed")
@@ -204,6 +216,17 @@ func TestNeedsAreRegistered(t *testing.T) {
 				if perms.Lookup(id).Title == "" {
 					t.Errorf("%s needs unregistered permission %q", d.Type, id)
 				}
+			}
+		}
+	}
+}
+
+func TestFinishedAndInputNeededCommandsDiffer(t *testing.T) {
+	a := Answers{Sound: "Glass", ClickToFocus: true}
+	for _, f := range Entries(Finished, a) {
+		for _, in := range Entries(InputNeeded, a) {
+			if f.Command == in.Command {
+				t.Errorf("finished and input-needed share command %q", f.Command)
 			}
 		}
 	}

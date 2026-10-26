@@ -145,7 +145,15 @@ func Entries(t Type, a Answers) []Entry {
 		}
 		return []Entry{{"SessionStart", "", cmd, 10}}
 	case Finished:
-		return []Entry{{"Stop", "", CommandPrefix + "stop" + soundFocusArgs(a), 10}}
+		// revisit clears the session's finished light when the user goes
+		// back to it. It is not moved-on, so the two types never own the
+		// same command.
+		revisit := CommandPrefix + "revisit"
+		return []Entry{
+			{"Stop", "", CommandPrefix + "stop" + soundFocusArgs(a), 10},
+			{"UserPromptSubmit", "", revisit, 5},
+			{"SessionEnd", "", revisit, 5},
+		}
 	case InputNeeded:
 		moved := CommandPrefix + "moved-on"
 		return []Entry{
@@ -165,6 +173,10 @@ type Parsed struct {
 	Answers Answers
 }
 
+// CarriesAnswers reports whether the command holds its type's answers.
+// moved-on and revisit entries carry none.
+func (p Parsed) CarriesAnswers() bool { return p.Sub != "moved-on" && p.Sub != "revisit" }
+
 // ParseCommand recognises an app-owned hook command.
 func ParseCommand(cmd string) (Parsed, bool) {
 	rest, ok := strings.CutPrefix(cmd, CommandPrefix)
@@ -180,7 +192,7 @@ func ParseCommand(cmd string) (Parsed, bool) {
 	switch sub {
 	case "session-start":
 		t = GitStatus
-	case "stop":
+	case "stop", "revisit":
 		t = Finished
 	case "notification", "moved-on":
 		t = InputNeeded

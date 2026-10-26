@@ -176,6 +176,44 @@ func TestInputNeededAnswersFromNotificationEntry(t *testing.T) {
 	}
 }
 
+func TestFinishedAnswersFromStopEntry(t *testing.T) {
+	// The revisit entries come first in file order and carry no answers;
+	// the reported answers must still be the stop entry's.
+	f, err := load(t, `{
+  "hooks": {
+    "UserPromptSubmit": [{"hooks": [{"type": "command", "command": "~/.pcs/bin/pcs-hook hook revisit", "timeout": 5}]}],
+    "SessionEnd": [{"hooks": [{"type": "command", "command": "~/.pcs/bin/pcs-hook hook revisit", "timeout": 5}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "~/.pcs/bin/pcs-hook hook stop --sound Hero --no-focus", "timeout": 10}]}]
+  }
+}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := emptyStore()
+	st.Hooks[hooktypes.Finished] = hooktypes.Answers{Sound: "Glass", ClickToFocus: true}
+	want := hooktypes.Answers{Sound: "Hero", ClickToFocus: false}
+
+	if a, enabled := CurrentAnswers(f, st, hooktypes.Finished); !enabled || a != want {
+		t.Fatalf("CurrentAnswers = %+v enabled=%v, want %+v", a, enabled, want)
+	}
+	if h := hookView(t, Build(f, nil, st, nil), hooktypes.Finished); !h.Enabled || h.Answers != want {
+		t.Fatalf("finished view = %+v", h)
+	}
+}
+
+func TestFinishedRevisitOnlyUsesStoredAnswers(t *testing.T) {
+	f, err := load(t, `{"hooks": {"UserPromptSubmit": [{"hooks": [{"type": "command", "command": "~/.pcs/bin/pcs-hook hook revisit"}]}]}}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st := emptyStore()
+	saved := hooktypes.Answers{Sound: "Tink", ClickToFocus: true}
+	st.Hooks[hooktypes.Finished] = saved
+	if a, enabled := CurrentAnswers(f, st, hooktypes.Finished); !enabled || a != saved {
+		t.Fatalf("CurrentAnswers = %+v enabled=%v, want %+v", a, enabled, saved)
+	}
+}
+
 func TestOtherHooksListed(t *testing.T) {
 	f, err := load(t, userSettings)
 	if err != nil {

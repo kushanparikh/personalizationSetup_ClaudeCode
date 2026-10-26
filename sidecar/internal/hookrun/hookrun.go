@@ -118,7 +118,7 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 			e.SessionID = "unknown"
 		}
 		send(d, log, e, true)
-	case "moved-on":
+	case "moved-on", "revisit":
 		id := in.SessionID
 		if id == "" {
 			id = "unknown"

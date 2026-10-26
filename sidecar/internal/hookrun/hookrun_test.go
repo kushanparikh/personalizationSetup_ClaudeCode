@@ -163,6 +163,20 @@ func TestMovedOnCarriesStopCause(t *testing.T) {
 	}
 }
 
+func TestRevisitIsMovedOn(t *testing.T) {
+	for _, ev := range []string{"UserPromptSubmit", "SessionEnd"} {
+		r := &rec{sendErr: errors.New("down")}
+		run(t, "revisit", nil, `{"session_id":"s1","hook_event_name":"`+ev+`"}`, r.deps(nil))
+		if len(r.events) != 1 || r.launches[0] || r.ttyCalls != 0 || r.gitCalls != 0 {
+			t.Fatalf("%s: events=%v launch=%v tty=%d", ev, r.events, r.launches, r.ttyCalls)
+		}
+		want := ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: "s1", Cause: ev}
+		if r.events[0] != want {
+			t.Fatalf("%s: got %+v want %+v", ev, r.events[0], want)
+		}
+	}
+}
+
 func TestPanicRecovered(t *testing.T) {
 	r := &rec{panicOn: true}
 	run(t, "stop", nil, `{}`, r.deps(nil))
@@ -183,7 +197,7 @@ func (h panicHandler) WithAttrs([]slog.Attr) slog.Handler      { panic("log") }
 func (h panicHandler) WithGroup(string) slog.Handler           { panic("log") }
 
 func TestPanickingLoggerStillZero(t *testing.T) {
-	for _, sub := range []string{"stop", "notification", "moved-on", "bogus"} {
+	for _, sub := range []string{"stop", "notification", "moved-on", "revisit", "bogus"} {
 		r := &rec{panicOn: true}
 		d := r.deps(nil)
 		d.Log = slog.New(panicHandler{})
@@ -192,7 +206,7 @@ func TestPanickingLoggerStillZero(t *testing.T) {
 }
 
 func TestNoStdoutExceptSessionStart(t *testing.T) {
-	for _, sub := range []string{"stop", "notification", "moved-on", "bogus"} {
+	for _, sub := range []string{"stop", "notification", "moved-on", "revisit", "bogus"} {
 		r := &rec{}
 		if got := run(t, sub, nil, `{}`, r.deps(nil)); got != "" {
 			t.Fatalf("%s wrote %q", sub, got)
