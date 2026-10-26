@@ -32,19 +32,23 @@ type Report struct {
 
 // HookView is one of the app's hook types as the user has set it up.
 type HookView struct {
-	Type        hooktypes.Type    `json:"type"`
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Enabled     bool              `json:"enabled"`
-	Answers     hooktypes.Answers `json:"answers"`
-	Status      string            `json:"status"`
-	Needs       []Need            `json:"needs"`
+	Type        hooktypes.Type       `json:"type"`
+	Name        string               `json:"name"`
+	Description string               `json:"description"`
+	Questions   []hooktypes.Question `json:"questions"`
+	Note        string               `json:"note,omitempty"`
+	Enabled     bool                 `json:"enabled"`
+	Answers     hooktypes.Answers    `json:"answers"`
+	Status      string               `json:"status"`
+	Needs       []Need               `json:"needs"`
 }
 
 // Need is one permission a hook needs and its current status.
 type Need struct {
-	ID     perms.ID     `json:"id"`
-	Status perms.Status `json:"status"`
+	ID      perms.ID     `json:"id"`
+	Title   string       `json:"title"`
+	Status  perms.Status `json:"status"`
+	Askable bool         `json:"askable"`
 }
 
 // OtherHook is a hook entry the app doesn't own; it is shown read-only.
@@ -69,8 +73,10 @@ func (p PendingItem) MarshalJSON() ([]byte, error) {
 		Steps       string       `json:"steps"`
 		SettingsURL string       `json:"settingsUrl"`
 		Status      perms.Status `json:"status"`
+		Askable     bool         `json:"askable"`
+		UnknownHint string       `json:"unknownHint"`
 		Affects     []string     `json:"affects"`
-	}{p.ID, p.Title, p.Steps, p.SettingsURL, p.Status, p.Affects}
+	}{p.ID, p.Title, p.Steps, p.SettingsURL, p.Status, p.Askable, p.UnknownHint, p.Affects}
 	if v.Affects == nil {
 		v.Affects = []string{}
 	}
@@ -149,9 +155,10 @@ func Build(f *settings.File, loadErr error, st *state.Store, have map[perms.ID]p
 			continue
 		}
 		v := HookView{Type: d.Type, Name: d.Name, Description: d.Description,
+			Questions: d.Questions, Note: d.Note,
 			Enabled: enabled, Answers: a, Status: StatusOff, Needs: []Need{}}
 		for _, id := range hooktypes.Needs(d.Type, a) {
-			v.Needs = append(v.Needs, Need{ID: id, Status: status(id)})
+			v.Needs = append(v.Needs, Need{ID: id, Title: perms.Lookup(id).Title, Status: status(id), Askable: perms.Lookup(id).Askable})
 		}
 		if enabled {
 			v.Status = StatusOK

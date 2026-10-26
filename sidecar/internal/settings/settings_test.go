@@ -109,7 +109,7 @@ func load(t *testing.T, p string) *File {
 
 func save(t *testing.T, f *File, o SaveOptions) string {
 	t.Helper()
-	b, err := f.Save(o)
+	b, _, err := f.Save(o)
 	if err != nil {
 		t.Fatalf("Save: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestInvalidRefusesWrite(t *testing.T) {
 	if err := os.WriteFile(p, []byte(bad), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	backup, err := f.Save(o)
+	backup, _, err := f.Save(o)
 	if !errors.As(err, &ie) {
 		t.Fatalf("Save: want *InvalidError, got %T %v", err, err)
 	}
@@ -640,7 +640,13 @@ func TestIdenticalSavesKeepFirstBackup(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		f := load(t, p)
 		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
-		b := save(t, f, o)
+		b, changed, err := f.Save(o)
+		if err != nil {
+			t.Fatalf("Save: %v", err)
+		}
+		if changed != (i == 0) {
+			t.Fatalf("save %d: changed = %v", i, changed)
+		}
 		if i > 0 && b != "" {
 			t.Fatalf("save %d made backup %q for an identical file", i, b)
 		}
@@ -666,7 +672,7 @@ func TestSaveRefusesIfChangedSinceLoad(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
-		_, err := f.Save(o)
+		_, _, err := f.Save(o)
 		if !errors.Is(err, ErrChangedSinceLoad) {
 			t.Fatalf("Save err = %v, want ErrChangedSinceLoad", err)
 		}
@@ -688,7 +694,7 @@ func TestSaveRefusesIfChangedSinceLoad(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
-		if _, err := f.Save(SaveOptions{BackupDir: filepath.Join(dir, "backups")}); !errors.Is(err, ErrChangedSinceLoad) {
+		if _, _, err := f.Save(SaveOptions{BackupDir: filepath.Join(dir, "backups")}); !errors.Is(err, ErrChangedSinceLoad) {
 			t.Fatalf("Save err = %v, want ErrChangedSinceLoad", err)
 		}
 		if got := read(t, p); got != changed {
@@ -702,7 +708,7 @@ func TestSaveRefusesIfChangedSinceLoad(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
-		if _, err := f.Save(o); !errors.Is(err, ErrChangedSinceLoad) {
+		if _, _, err := f.Save(o); !errors.Is(err, ErrChangedSinceLoad) {
 			t.Fatalf("Save err = %v, want ErrChangedSinceLoad", err)
 		}
 		if _, err := os.Lstat(p); !os.IsNotExist(err) {
@@ -720,7 +726,7 @@ func TestSaveRefusesDanglingSymlink(t *testing.T) {
 	}
 	f := load(t, link)
 	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
-	if _, err := f.Save(SaveOptions{BackupDir: filepath.Join(dir, "backups")}); err == nil {
+	if _, _, err := f.Save(SaveOptions{BackupDir: filepath.Join(dir, "backups")}); err == nil {
 		t.Fatal("Save through a dangling symlink succeeded")
 	}
 	st, err := os.Lstat(link)

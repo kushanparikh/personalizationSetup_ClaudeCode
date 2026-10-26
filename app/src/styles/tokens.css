@@ -1,0 +1,76 @@
+/*
+ * Design tokens shared by the alert windows and the config window.
+ *
+ * Direction: "indicator lamp". Surfaces are quiet frosted graphite, like a
+ * macOS utility; the one loud thing is a lamp colour that says what kind of
+ * alert it is. Sodium amber means Claude is waiting on you; verdigris means
+ * work finished. Type is the system face, with SF Pro Rounded for names.
+ */
+:root {
+  color-scheme: light dark;
+
+  /* palette (light) */
+  --c-surface: #f3f5f8; /* frost */
+  --c-surface-raised: #ffffff;
+  --c-ink: #18202b; /* graphite */
+  --c-muted: #5d6878; /* slate */
+  --c-hairline: #d5dbe3;
+  --c-hover: #e8ecf1;
+  --c-lamp-wait: #d9960c; /* sodium: needs your input */
+  --c-lamp-done: #2f8f7b; /* verdigris: finished */
+  --c-lamp-danger: #d23a2a; /* signal red: something failed */
+  --c-danger: #c2412d;
+  --c-focus: #3a6fd8;
+
+  /* config window (extends the palette above) */
+  --c-sidebar: #e7ebf0; /* deeper frost for the source list */
+  --c-selected: #d6dde6; /* selected sidebar row */
+  --c-on-ink: #ffffff; /* text on a graphite button */
+  --c-wash-wait: #fbf1dc; /* banner behind a sodium lamp */
+  --c-wash-danger: #f9e4e0;
+  --c-wash-done: #e1f1ed;
+
+  /* type */
+  --f-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  --f-name: ui-rounded, "SF Pro Rounded", -apple-system, system-ui, sans-serif;
+  --f-mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --t-xs: 11px;
+  --t-sm: 13px;
+  --t-md: 15px;
+  --t-xl: 26px;
+  --lh-tight: 1.2;
+  --lh-body: 1.25;
+  --w-medium: 500;
+  --w-semibold: 600;
+
+  /* shape */
+  --r-sm: 5px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --lamp-w: 4px;
+
+  /* motion */
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-surface: #1d232c;
+    --c-surface-raised: #262d38;
+    --c-ink: #e9eef4;
+    --c-muted: #97a3b3;
+    --c-hairline: #313a47;
+    --c-hover: #2a323e;
+    --c-lamp-wait: #f2b53a;
+    --c-lamp-done: #4fb59f;
+    --c-lamp-danger: #f0604d;
+    --c-danger: #ef7a66;
+    --c-focus: #7aa2f0;
+    --c-sidebar: #171c23;
+    --c-selected: #2c3542;
+    --c-on-ink: #171c23;
+    --c-wash-wait: #3a3021;
+    --c-wash-danger: #3d2523;
+    --c-wash-done: #1e3530;
+  }
+}

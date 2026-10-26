@@ -41,24 +41,48 @@ type Entry struct {
 	Timeout                 int
 }
 
+// Question kinds the settings form knows how to render.
+const (
+	KindBool  = "bool"
+	KindSound = "sound"
+)
+
+// Question is one thing the settings form asks. Key is the json tag of an
+// Answers field; Kind says which control edits it.
+type Question struct {
+	Key   string `json:"key"`
+	Kind  string `json:"kind"`
+	Label string `json:"label"`
+}
+
 // Def describes a hook type.
 type Def struct {
-	Type        Type    `json:"type"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Defaults    Answers `json:"defaults"`
+	Type        Type       `json:"type"`
+	Name        string     `json:"name"`
+	Description string     `json:"description"`
+	Defaults    Answers    `json:"defaults"`
+	Questions   []Question `json:"questions"`
+	Note        string     `json:"note,omitempty"`
 }
+
+var notifyQuestions = []Question{
+	{"sound", KindSound, "Sound"},
+	{"clickToFocus", KindBool, "Click focuses the session's terminal tab"},
+}
+
+const spacesNote = "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward."
 
 var defs = []Def{
 	{GitStatus, "Git status on session start",
 		"Shows the repo, branch and whether there are uncommitted changes when a Claude Code session starts.",
-		Answers{UntrackedDirty: true}},
+		Answers{UntrackedDirty: true},
+		[]Question{{"untrackedDirty", KindBool, "Count untracked files as dirty"}}, ""},
 	{Finished, "Finished working",
 		"A banner that slides away when Claude finishes. Click it to jump to that session's terminal tab.",
-		Answers{Sound: "Glass", ClickToFocus: true}},
+		Answers{Sound: "Glass", ClickToFocus: true}, notifyQuestions, spacesNote},
 	{InputNeeded, "Input needed",
 		"A panel that stays on screen while Claude is waiting on you. Click it to jump to that session's terminal tab.",
-		Answers{Sound: "Ping", ClickToFocus: true}},
+		Answers{Sound: "Ping", ClickToFocus: true}, notifyQuestions, spacesNote},
 }
 
 // All returns every hook type in display order.
@@ -91,12 +115,7 @@ func Validate(t Type, a Answers) error {
 func Needs(t Type, a Answers) []perms.ID {
 	need := []perms.ID{}
 	switch t {
-	case Finished:
-		need = append(need, perms.Notifications)
-		if a.ClickToFocus {
-			need = append(need, perms.AutomationTerminal)
-		}
-	case InputNeeded:
+	case Finished, InputNeeded:
 		if a.ClickToFocus {
 			need = append(need, perms.AutomationTerminal)
 		}

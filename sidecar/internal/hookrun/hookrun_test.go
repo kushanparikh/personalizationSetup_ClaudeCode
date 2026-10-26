@@ -66,11 +66,11 @@ func TestSessionStartGitFailsPrintsNothing(t *testing.T) {
 	}
 }
 
-func TestStopBanner(t *testing.T) {
+func TestStopToast(t *testing.T) {
 	r := &rec{}
 	run(t, "stop", []string{"--sound", "Glass", "--focus"}, `{"cwd":"/x/My Project"}`,
 		r.deps(map[string]string{"__CFBundleIdentifier": "com.apple.Terminal", "TERM_PROGRAM": "Apple_Terminal"}))
-	want := ipc.Event{V: 1, Kind: ipc.KindBanner, Title: "Claude Code — My Project", Message: "Finished working",
+	want := ipc.Event{V: 1, Kind: ipc.KindToast, Title: "Claude Code — My Project", Message: "Finished working", Tone: ipc.ToneDone,
 		Sound: "Glass", Focus: true, TTY: "/dev/ttys009", BundleID: "com.apple.Terminal", SessionID: ""}
 	if len(r.events) != 1 || !r.launches[0] {
 		t.Fatalf("events %v launches %v", r.events, r.launches)
@@ -96,7 +96,7 @@ func TestNotificationPanel(t *testing.T) {
 	run(t, "notification", []string{"--sound", "Ping", "--focus"},
 		`{"session_id":"s1","cwd":"/x/p","message":"hello"}`, r.deps(nil))
 	e := r.events[0]
-	if e.Kind != ipc.KindPanel || e.Message == "" || e.Message != "hello" || e.SessionID != "s1" || !r.launches[0] || e.Sound != "Ping" {
+	if e.Kind != ipc.KindPanel || e.Message == "" || e.Message != "hello" || e.SessionID != "s1" || e.Tone != ipc.ToneWait || !r.launches[0] || e.Sound != "Ping" {
 		t.Fatalf("%+v", e)
 	}
 }
@@ -133,7 +133,7 @@ func TestMovedOnNeverLaunches(t *testing.T) {
 		t.Fatalf("launch=%v tty=%d", r.launches, r.ttyCalls)
 	}
 	e := r.events[0]
-	if e.Kind != ipc.KindMovedOn || e.SessionID != "s1" || e.V != 1 {
+	if e.Kind != ipc.KindMovedOn || e.SessionID != "s1" || e.Tone != "" || e.V != 1 {
 		t.Fatalf("%+v", e)
 	}
 }

@@ -2,6 +2,7 @@ package hooktypes
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/perms"
@@ -84,8 +85,8 @@ func TestNeeds(t *testing.T) {
 		a    Answers
 		want []perms.ID
 	}{
-		{Finished, Answers{Sound: "Glass", ClickToFocus: true}, []perms.ID{perms.Notifications, perms.AutomationTerminal}},
-		{Finished, Answers{Sound: "Glass"}, []perms.ID{perms.Notifications}},
+		{Finished, Answers{Sound: "Glass", ClickToFocus: true}, []perms.ID{perms.AutomationTerminal}},
+		{Finished, Answers{Sound: "Glass"}, []perms.ID{}},
 		{InputNeeded, Answers{Sound: "Ping", ClickToFocus: true}, []perms.ID{perms.AutomationTerminal}},
 		{GitStatus, Answers{UntrackedDirty: true}, []perms.ID{}},
 	}
@@ -145,5 +146,65 @@ func TestParseCommandEdgeCases(t *testing.T) {
 	p, ok := ParseCommand("~/.pcs/bin/pcs-hook hook stop --sound")
 	if !ok || p.Type != Finished || p.Answers.Sound != "" {
 		t.Errorf("%+v ok=%v", p, ok)
+	}
+}
+
+func TestNeedsFinishedNoNotifications(t *testing.T) {
+	got := Needs(Finished, Answers{Sound: "Glass", ClickToFocus: true})
+	if !reflect.DeepEqual(got, []perms.ID{perms.AutomationTerminal}) {
+		t.Errorf("click-to-focus: got %#v", got)
+	}
+	if got := Needs(Finished, Answers{Sound: "Glass"}); len(got) != 0 {
+		t.Errorf("no focus: got %#v", got)
+	}
+}
+
+// A typo'd or mistyped question key would silently drop an answer in the form.
+func TestQuestionKeysMatchAnswers(t *testing.T) {
+	fields := map[string]reflect.Kind{}
+	at := reflect.TypeOf(Answers{})
+	for i := 0; i < at.NumField(); i++ {
+		tag, _, _ := strings.Cut(at.Field(i).Tag.Get("json"), ",")
+		fields[tag] = at.Field(i).Type.Kind()
+	}
+	want := map[string]reflect.Kind{KindBool: reflect.Bool, KindSound: reflect.String}
+	for _, d := range All() {
+		if len(d.Questions) == 0 {
+			t.Errorf("%s has no questions", d.Type)
+		}
+		seen := map[string]bool{}
+		for _, q := range d.Questions {
+			if seen[q.Key] {
+				t.Errorf("%s: duplicate question key %q", d.Type, q.Key)
+			}
+			seen[q.Key] = true
+			k, ok := fields[q.Key]
+			if !ok {
+				t.Errorf("%s: question key %q is not an Answers json tag", d.Type, q.Key)
+				continue
+			}
+			wk, ok := want[q.Kind]
+			if !ok {
+				t.Errorf("%s: unknown question kind %q", d.Type, q.Kind)
+			} else if wk != k {
+				t.Errorf("%s: question %q kind %q needs a %v field, Answers has %v", d.Type, q.Key, q.Kind, wk, k)
+			}
+			if q.Label == "" {
+				t.Errorf("%s: question %q has no label", d.Type, q.Key)
+			}
+		}
+	}
+}
+
+func TestNeedsAreRegistered(t *testing.T) {
+	for _, d := range All() {
+		for _, on := range []bool{false, true} {
+			a := Answers{ClickToFocus: on}
+			for _, id := range Needs(d.Type, a) {
+				if perms.Lookup(id).Title == "" {
+					t.Errorf("%s needs unregistered permission %q", d.Type, id)
+				}
+			}
+		}
 	}
 }

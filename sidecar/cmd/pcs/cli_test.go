@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,9 +12,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/ipc"
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/perms"
 )
 
 var pcsBin string
+
+var update = flag.Bool("update", false, "rewrite testdata golden files")
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "pcs-cli-test-")
@@ -348,7 +355,7 @@ func TestApplyRefusesUneditableHooks(t *testing.T) {
 
 func TestStateReport(t *testing.T) {
 	e := newEnv(t, userSettings)
-	rep := e.ok("state", "--notifications", "granted")
+	rep := e.ok("state")
 	if other, _ := rep["otherHooks"].([]any); len(other) != 3 {
 		t.Fatalf("otherHooks = %v", rep["otherHooks"])
 	}
@@ -358,7 +365,32 @@ func TestStateReport(t *testing.T) {
 	if lp, _ := rep["logPath"].(string); lp != filepath.Join(e.home, "Library", "Logs", "Personalization Setup", "pcs.log") {
 		t.Fatalf("logPath = %q", lp)
 	}
-	e.fail("state", "--notifications", "maybe")
+}
+
+func TestStateRejectsNotificationsFlag(t *testing.T) {
+	e := newEnv(t, userSettings)
+	e.fail("state", "--notifications", "granted")
+}
+
+func TestReportNeverListsNotifications(t *testing.T) {
+	e := newEnv(t, userSettings)
+	rep := e.ok("apply", "--type", "finished", "--answers", `{"sound":"Glass","clickToFocus":true}`)
+	for _, key := range []string{"needs", "pending"} {
+		items, _ := rep[key].([]any)
+		for _, it := range items {
+			if m, _ := it.(map[string]any); m["id"] == "notifications" {
+				t.Fatalf("%s lists notifications: %v", key, items)
+			}
+		}
+	}
+	for _, h := range rep["hooks"].([]any) {
+		needs, _ := h.(map[string]any)["needs"].([]any)
+		for _, n := range needs {
+			if n == "notifications" {
+				t.Fatalf("hook needs lists notifications: %v", needs)
+			}
+		}
+	}
 }
 
 func TestUninstall(t *testing.T) {
@@ -411,7 +443,7 @@ func TestErrors(t *testing.T) {
 	e := newEnv(t, userSettings)
 	e.fail()
 	e.fail("bogus")
-	if msg := e.fail("perm", "request", "--id", "notifications"); msg != "notifications are requested by the app" {
+	if msg := e.fail("perm", "request", "--id", "notifications"); msg != `unknown permission "notifications"` {
 		t.Fatalf("error = %q", msg)
 	}
 	if msg := e.fail("send-test", "--type", "finished"); msg != "the app isn't listening for hook events. Is it running?" {
@@ -514,5 +546,112 @@ func TestApplyRejectsUnknownAnswerKeys(t *testing.T) {
 	e.fail("apply", "--type", "finished", "--answers", `{"sound":"Glass"} {}`)
 	if e.settings() != userSettings {
 		t.Fatalf("settings changed:\n%s", e.settings())
+	}
+}
+
+// TestServeLinesGolden runs the real `pcs serve`, sends one event of each
+// kind through the real client, and compares what serve printed, plus the
+// line a second serve prints, with the golden the Rust tests also parse.
+func TestServeLinesGolden(t *testing.T) {
+	home, err := os.MkdirTemp("", "pcs") // short: unix socket paths are limited
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(home) })
+	e := &env{t: t, home: home}
+
+	cmd := exec.Command(pcsBin, "serve")
+	cmd.Env = e.environ()
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stdin.Close(); _ = cmd.Wait() })
+	lines := make(chan string, 16)
+	go func() {
+		sc := bufio.NewScanner(stdout)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+	next := func() string {
+		t.Helper()
+		select {
+		case l, ok := <-lines:
+			if !ok {
+				t.Fatal("serve closed stdout")
+			}
+			return l
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for a serve line")
+		}
+		return ""
+	}
+
+	got := []string{next()} // ready
+	c := &ipc.Client{Socket: filepath.Join(home, ".pcs", "run", "app.sock"), DialTimeout: time.Second}
+	for _, ev := range []ipc.Event{
+		{V: 1, Kind: ipc.KindToast, Title: "Claude Code — demo", Message: "Finished working", Tone: ipc.ToneDone, Sound: "Glass"},
+		{V: 1, Kind: ipc.KindPanel, SessionID: "s1", Title: "Claude Code — demo", Message: "Needs input", Tone: ipc.ToneWait, Sound: "Ping", TTY: "/dev/ttys003", BundleID: "com.apple.Terminal", Focus: true},
+		{V: 1, Kind: ipc.KindMovedOn, SessionID: "s1"},
+	} {
+		if err := c.Send(ev, false); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, next())
+	}
+
+	out, code := e.run("", "serve")
+	if code != 1 {
+		t.Fatalf("second serve: exit %d: %s", code, out)
+	}
+	got = append(got, strings.TrimSuffix(out, "\n"))
+
+	body := strings.Join(got, "\n") + "\n"
+	golden := filepath.Join("..", "..", "internal", "ipc", "testdata", "serve-lines.golden.jsonl")
+	if *update {
+		if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(golden, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(want) != body {
+		t.Fatalf("serve lines differ from %s (run go test ./cmd/pcs ./internal/report -update)\ngot:\n%swant:\n%s", golden, body, want)
+	}
+}
+
+func TestCmdPermUsesRegistry(t *testing.T) {
+	asked := 0
+	defer perms.SetRegistryForTest([]perms.Info{
+		{ID: "fake-ask", Title: "Fake", Askable: true, Check: func() perms.Status { return perms.Unknown },
+			Request: func() perms.Status { asked++; return perms.Granted }},
+		{ID: "fake-noask", Title: "No", Check: func() perms.Status { return perms.Unknown },
+			Request: func() perms.Status { asked++; return perms.Granted }},
+	})()
+	out, err := cmdPerm([]string{"request", "--id", "fake-ask"})
+	if err != nil || asked != 1 || out.(map[string]any)["status"] != perms.Granted {
+		t.Fatalf("out=%v err=%v asked=%d", out, err, asked)
+	}
+	for _, id := range []string{"fake-noask", "nope"} {
+		if _, err := cmdPerm([]string{"request", "--id", id}); err == nil {
+			t.Errorf("%s: want error", id)
+		}
+	}
+	if asked != 1 {
+		t.Errorf("request ran for a non-askable permission")
 	}
 }

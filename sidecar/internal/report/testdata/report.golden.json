@@ -1,0 +1,138 @@
+{
+  "hooks": [
+    {
+      "type": "git-status",
+      "name": "Git status on session start",
+      "description": "Shows the repo, branch and whether there are uncommitted changes when a Claude Code session starts.",
+      "questions": [
+        {
+          "key": "untrackedDirty",
+          "kind": "bool",
+          "label": "Count untracked files as dirty"
+        }
+      ],
+      "enabled": true,
+      "answers": {
+        "untrackedDirty": true,
+        "sound": "",
+        "clickToFocus": false
+      },
+      "status": "ok",
+      "needs": []
+    },
+    {
+      "type": "finished",
+      "name": "Finished working",
+      "description": "A banner that slides away when Claude finishes. Click it to jump to that session's terminal tab.",
+      "questions": [
+        {
+          "key": "sound",
+          "kind": "sound",
+          "label": "Sound"
+        },
+        {
+          "key": "clickToFocus",
+          "kind": "bool",
+          "label": "Click focuses the session's terminal tab"
+        }
+      ],
+      "note": "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward.",
+      "enabled": true,
+      "answers": {
+        "untrackedDirty": false,
+        "sound": "Glass",
+        "clickToFocus": true
+      },
+      "status": "pending",
+      "needs": [
+        {
+          "id": "automation-terminal",
+          "title": "Control Terminal",
+          "status": "not-asked",
+          "askable": true
+        }
+      ]
+    },
+    {
+      "type": "input-needed",
+      "name": "Input needed",
+      "description": "A panel that stays on screen while Claude is waiting on you. Click it to jump to that session's terminal tab.",
+      "questions": [
+        {
+          "key": "sound",
+          "kind": "sound",
+          "label": "Sound"
+        },
+        {
+          "key": "clickToFocus",
+          "kind": "bool",
+          "label": "Click focuses the session's terminal tab"
+        }
+      ],
+      "note": "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward.",
+      "enabled": false,
+      "answers": {
+        "untrackedDirty": false,
+        "sound": "Ping",
+        "clickToFocus": true
+      },
+      "status": "off",
+      "needs": [
+        {
+          "id": "automation-terminal",
+          "title": "Control Terminal",
+          "status": "not-asked",
+          "askable": true
+        }
+      ]
+    }
+  ],
+  "available": [
+    {
+      "type": "input-needed",
+      "name": "Input needed",
+      "description": "A panel that stays on screen while Claude is waiting on you. Click it to jump to that session's terminal tab.",
+      "defaults": {
+        "untrackedDirty": false,
+        "sound": "Ping",
+        "clickToFocus": true
+      },
+      "questions": [
+        {
+          "key": "sound",
+          "kind": "sound",
+          "label": "Sound"
+        },
+        {
+          "key": "clickToFocus",
+          "kind": "bool",
+          "label": "Click focuses the session's terminal tab"
+        }
+      ],
+      "note": "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward."
+    }
+  ],
+  "otherHooks": [
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "echo one"
+    }
+  ],
+  "pending": [
+    {
+      "id": "automation-terminal",
+      "title": "Control Terminal",
+      "steps": "Open System Settings → Privacy & Security → Automation → Personalization Setup, and turn on Terminal.",
+      "settingsUrl": "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+      "status": "not-asked",
+      "askable": true,
+      "unknownHint": "Couldn't check this yet. Terminal may not be running. Click Ask for permission to check again.",
+      "affects": [
+        "Finished working"
+      ]
+    }
+  ],
+  "settingsError": "",
+  "logPath": "/tmp/pcs.log"
+}
