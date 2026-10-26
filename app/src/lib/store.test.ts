@@ -24,7 +24,7 @@ function report(over: Partial<Report> = {}, perm: PermStatus = "not-asked", ok =
       {
         id: "automation-terminal",
         title: "Control Terminal",
-        steps: [],
+        steps: "",
         settingsUrl: "x",
         status: ok ? "granted" : perm,
         affects: ["Finished working"],

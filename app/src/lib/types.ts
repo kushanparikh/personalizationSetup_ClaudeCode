@@ -35,7 +35,7 @@ export interface OtherHook {
 export interface PendingItem {
   id: PermId;
   title: string;
-  steps: string[];
+  steps: string;
   settingsUrl: string;
   status: PermStatus;
   affects: string[];

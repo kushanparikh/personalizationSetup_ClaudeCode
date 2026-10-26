@@ -55,7 +55,7 @@ function fixture(over: Partial<Report> = {}): Report {
       {
         id: "automation-terminal",
         title: "Let the app control Terminal",
-        steps: ["Open System Settings → Privacy & Security → Automation.", "Turn on Terminal under Personalization Setup."],
+        steps: "Open System Settings → Privacy & Security → Automation → Personalization Setup, and turn on Terminal.",
         settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
         status: "denied",
         affects: ["Input needed"],
@@ -156,7 +156,9 @@ describe("App", () => {
     await myHooks();
     const pending = screen.getByRole("list", { name: "Pending" });
     await fireEvent.click(within(pending).getByText("Let the app control Terminal"));
-    expect(await screen.findByText("Turn on Terminal under Personalization Setup.")).toBeTruthy();
+    expect(
+      await screen.findByText("Open System Settings → Privacy & Security → Automation → Personalization Setup, and turn on Terminal."),
+    ).toBeTruthy();
     expect(screen.getByText("Affects: Input needed")).toBeTruthy();
     await fireEvent.click(screen.getByRole("button", { name: "Open Settings" }));
     await waitFor(() => expect(count(calls, "open_settings")).toBe(1));

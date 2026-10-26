@@ -14,12 +14,8 @@
     </div>
   </header>
 
-  {#if item.steps.length > 0}
-    <ol class="steps">
-      {#each item.steps as s, i (i)}
-        <li>{s}</li>
-      {/each}
-    </ol>
+  {#if item.steps}
+    <p class="steps">{item.steps}</p>
   {/if}
 
   <p class="affects">Affects: {item.affects.join(", ")}</p>
@@ -57,18 +53,11 @@
   }
   .steps {
     margin: 22px 0 0;
-    padding: 18px 0 0 22px;
+    padding: 18px 0 0;
     border-top: 1px solid var(--c-hairline);
     max-width: 60ch;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
     font-size: var(--t-md);
     line-height: 1.4;
-  }
-  .steps li::marker {
-    color: var(--c-muted);
-    font-variant-numeric: tabular-nums;
   }
   .affects {
     margin: 18px 0 0;
