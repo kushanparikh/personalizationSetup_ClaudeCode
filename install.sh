@@ -105,7 +105,7 @@ else
     fi
   fi
   if [ "$got" -eq 0 ]; then
-    echo "Couldn't download the app. The repository may be private: install GitHub CLI (brew install gh), run 'gh auth login', and re-run. Or download Personalization-Setup-macos.zip from the Releases page and run ./install.sh --zip <file>."
+    echo "Couldn't download the app. Check your internet connection and re-run. Or download Personalization-Setup-macos.zip and its .sha256 file from the Releases page and run ./install.sh --zip <file>."
     exit 1
   fi
 fi

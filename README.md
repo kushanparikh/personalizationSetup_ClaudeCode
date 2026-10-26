@@ -30,7 +30,7 @@ Exit codes: `0` installed and launched; `1` a prerequisite, download or check fa
 
 The first time it runs, the installer saves a copy of your Claude Code settings to `~/.claude/settings.json.pcs-original`. It skips this when the settings already contain Personalization Setup's hooks (or `~/.pcs` exists), because then the copy wouldn't be the original.
 
-**Private repository.** If the download fails, install GitHub CLI (`brew install gh`), run `gh auth login`, and re-run. Or download `Personalization-Setup-macos.zip` and `Personalization-Setup-macos.zip.sha256` from the Releases page into the same folder and run `./install.sh --zip <file>`. After the checksum passes, the installer removes the browser's quarantine flag from the app.
+**If the download fails,** check your internet connection and re-run. Or download `Personalization-Setup-macos.zip` and `Personalization-Setup-macos.zip.sha256` from the Releases page into the same folder and run `./install.sh --zip <file>`. After the checksum passes, the installer removes the browser's quarantine flag from the app.
 
 **First launch.** The app is not signed with an Apple Developer ID, so macOS may block it. Open System Settings, go to Privacy & Security, click **Open Anyway** for Personalization Setup, then run the same `./install.sh` command again (with `--zip <file>` if you used it).
 
@@ -88,3 +88,7 @@ Logs are in `~/Library/Logs/Personalization Setup/`:
 - `install.log` for `install.sh` and `uninstall.sh`
 
 If the app does not start, open it from `~/Applications` to see the error.
+
+## License
+
+[MIT](LICENSE) © 2026 Kushan Parikh

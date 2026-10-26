@@ -3,6 +3,7 @@ name = "personalization-setup"
 version = "0.1.0"
 description = "Personalization Setup for Claude Code hooks"
 authors = ["Kushan Parikh"]
+license = "MIT"
 edition = "2021"
 
 [lib]
