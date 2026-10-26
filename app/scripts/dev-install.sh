@@ -11,7 +11,10 @@ if [ -f "$HOME/.cargo/env" ]; then
   source "$HOME/.cargo/env"
 fi
 
-APP_NAME="Personalization Setup"
+# shellcheck disable=SC1091
+source "$SCRIPT_DIR/../../scripts/lib/app.sh"
+PCS_QUIT_TIMEOUT="${PCS_QUIT_TIMEOUT:-5}"
+
 BUILT="$APP_DIR/src-tauri/target/release/bundle/macos/$APP_NAME.app"
 DEST_DIR="$HOME/Applications"
 DEST="$DEST_DIR/$APP_NAME.app"
@@ -25,31 +28,10 @@ if [ ! -d "$BUILT" ]; then
   exit 1
 fi
 
-# Print PIDs whose command is exactly the installed binary (with or without args).
-running_pids() {
-  local pid cmd
-  while read -r pid cmd; do
-    if [[ "$cmd" == "$DEST_BIN" || "$cmd" == "$DEST_BIN "* ]]; then
-      echo "$pid"
-    fi
-  done < <(ps -axo pid=,command=)
-}
-is_running() { [ -n "$(running_pids)" ]; }
-
 echo "==> Quitting any running copy"
-osascript -e 'quit app "Personalization Setup"' >/dev/null 2>&1 || true
-for _ in $(seq 1 25); do
-  is_running || break
-  sleep 0.2
-done
-if is_running; then
-  echo "    still running; killing $DEST_BIN"
-  for pid in $(running_pids); do kill "$pid" 2>/dev/null || true; done
-  sleep 1
-  if is_running; then
-    echo "ERROR: $DEST_BIN is still running; not replacing the bundle" >&2
-    exit 1
-  fi
+if ! app_quit; then
+  echo "ERROR: $DEST_BIN is still running; not replacing the bundle" >&2
+  exit 1
 fi
 
 echo "==> Installing to $DEST"
