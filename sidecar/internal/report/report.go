@@ -44,6 +44,7 @@ type HookView struct {
 // Need is one permission a hook needs and its current status.
 type Need struct {
 	ID     perms.ID     `json:"id"`
+	Title  string       `json:"title"`
 	Status perms.Status `json:"status"`
 }
 
@@ -69,8 +70,10 @@ func (p PendingItem) MarshalJSON() ([]byte, error) {
 		Steps       string       `json:"steps"`
 		SettingsURL string       `json:"settingsUrl"`
 		Status      perms.Status `json:"status"`
+		Askable     bool         `json:"askable"`
+		UnknownHint string       `json:"unknownHint"`
 		Affects     []string     `json:"affects"`
-	}{p.ID, p.Title, p.Steps, p.SettingsURL, p.Status, p.Affects}
+	}{p.ID, p.Title, p.Steps, p.SettingsURL, p.Status, p.Askable, p.UnknownHint, p.Affects}
 	if v.Affects == nil {
 		v.Affects = []string{}
 	}
@@ -151,7 +154,7 @@ func Build(f *settings.File, loadErr error, st *state.Store, have map[perms.ID]p
 		v := HookView{Type: d.Type, Name: d.Name, Description: d.Description,
 			Enabled: enabled, Answers: a, Status: StatusOff, Needs: []Need{}}
 		for _, id := range hooktypes.Needs(d.Type, a) {
-			v.Needs = append(v.Needs, Need{ID: id, Status: status(id)})
+			v.Needs = append(v.Needs, Need{ID: id, Title: perms.Lookup(id).Title, Status: status(id)})
 		}
 		if enabled {
 			v.Status = StatusOK

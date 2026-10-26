@@ -4,7 +4,7 @@
 
   let { store, item }: { store: AppStore; item: PendingItem } = $props();
   // macOS lists an app under Automation only after it has asked once, so Settings can't help yet.
-  let canAsk = $derived(item.status === "not-asked" || item.status === "unknown");
+  let canAsk = $derived(item.askable && (item.status === "not-asked" || item.status === "unknown"));
 </script>
 
 <article class="detail">
@@ -16,10 +16,10 @@
     </div>
   </header>
 
-  {#if item.status === "not-asked"}
+  {#if item.status === "not-asked" && item.askable}
     <p class="steps">macOS hasn't asked about this yet. Click Ask for permission, then choose Allow.</p>
-  {:else if item.status === "unknown"}
-    <p class="steps">Couldn't check this yet. Terminal may not be running. Click Ask for permission to check again.</p>
+  {:else if item.status === "unknown" && item.unknownHint}
+    <p class="steps">{item.unknownHint}</p>
   {:else if item.steps}
     <p class="steps">{item.steps}</p>
   {/if}

@@ -27,6 +27,7 @@
       "needs": [
         {
           "id": "automation-terminal",
+          "title": "Control Terminal",
           "status": "not-asked"
         }
       ]
@@ -45,6 +46,7 @@
       "needs": [
         {
           "id": "automation-terminal",
+          "title": "Control Terminal",
           "status": "not-asked"
         }
       ]
@@ -76,6 +78,8 @@
       "steps": "Open System Settings → Privacy & Security → Automation → Personalization Setup, and turn on Terminal.",
       "settingsUrl": "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
       "status": "not-asked",
+      "askable": true,
+      "unknownHint": "Couldn't check this yet. Terminal may not be running. Click Ask for permission to check again.",
       "affects": [
         "Finished working"
       ]

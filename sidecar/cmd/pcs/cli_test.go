@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/perms"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -630,5 +631,27 @@ func TestServeLinesGolden(t *testing.T) {
 	}
 	if string(want) != body {
 		t.Fatalf("serve lines differ from %s (run go test ./cmd/pcs ./internal/report -update)\ngot:\n%swant:\n%s", golden, body, want)
+	}
+}
+
+func TestCmdPermUsesRegistry(t *testing.T) {
+	asked := 0
+	defer perms.SetRegistryForTest([]perms.Info{
+		{ID: "fake-ask", Title: "Fake", Askable: true, Check: func() perms.Status { return perms.Unknown },
+			Request: func() perms.Status { asked++; return perms.Granted }},
+		{ID: "fake-noask", Title: "No", Check: func() perms.Status { return perms.Unknown },
+			Request: func() perms.Status { asked++; return perms.Granted }},
+	})()
+	out, err := cmdPerm([]string{"request", "--id", "fake-ask"})
+	if err != nil || asked != 1 || out.(map[string]any)["status"] != perms.Granted {
+		t.Fatalf("out=%v err=%v asked=%d", out, err, asked)
+	}
+	for _, id := range []string{"fake-noask", "nope"} {
+		if _, err := cmdPerm([]string{"request", "--id", id}); err == nil {
+			t.Errorf("%s: want error", id)
+		}
+	}
+	if asked != 1 {
+		t.Errorf("request ran for a non-askable permission")
 	}
 }

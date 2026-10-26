@@ -35,11 +35,12 @@ func cmdPerm(args []string) (any, error) {
 	if err := parse(fs, args[1:]); err != nil {
 		return nil, err
 	}
-	switch perms.ID(*id) {
-	case perms.AutomationTerminal:
-		s := perms.RequestAutomation(terminalBundleID)
-		slog.Default().Info("permission request", "id", *id, "status", s)
-		return map[string]any{"status": s}, nil
+	for _, p := range perms.All() {
+		if p.ID == perms.ID(*id) && p.Askable {
+			s := p.Request()
+			slog.Default().Info("permission request", "id", *id, "status", s)
+			return map[string]any{"status": s}, nil
+		}
 	}
 	return nil, fmt.Errorf("unknown permission %q", *id)
 }

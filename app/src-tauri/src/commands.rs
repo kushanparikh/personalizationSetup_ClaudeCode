@@ -14,11 +14,16 @@ pub struct WriteLock(pub Mutex<()>);
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(15);
 const PERM_TIMEOUT: Duration = Duration::from_secs(120);
-const PERM_ID: &str = "automation-terminal";
 const SETTINGS_PREFIX: &str = "x-apple.systempreferences:";
 
 pub fn is_settings_url(url: &str) -> bool {
     url.starts_with(SETTINGS_PREFIX)
+}
+
+/// Argument shape only: `pcs` decides whether the id names a real permission.
+fn is_perm_id(id: &str) -> bool {
+    (1..=40).contains(&id.len())
+        && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
 fn strs(v: &[&str]) -> Vec<String> {
@@ -89,10 +94,10 @@ pub async fn remove_hook(
 
 #[tauri::command]
 pub async fn request_permission(app: AppHandle, id: String) -> Result<Value, String> {
-    if id != PERM_ID {
-        return Err(format!("unknown permission id: {id}"));
+    if !is_perm_id(&id) {
+        return Err(format!("invalid permission id: {id}"));
     }
-    run_pcs(&app, strs(&["perm", "request", "--id", PERM_ID]), PERM_TIMEOUT).await
+    run_pcs(&app, strs(&["perm", "request", "--id", &id]), PERM_TIMEOUT).await
 }
 
 #[tauri::command]
@@ -125,5 +130,16 @@ mod tests {
         ));
         assert!(!is_settings_url("https://evil"));
         assert!(!is_settings_url("file:///etc"));
+    }
+
+    #[test]
+    fn perm_id_charset() {
+        assert!(is_perm_id("automation-terminal"));
+        assert!(is_perm_id("a1"));
+        assert!(!is_perm_id("a b"));
+        assert!(!is_perm_id("../x"));
+        assert!(!is_perm_id(""));
+        assert!(!is_perm_id("Upper"));
+        assert!(!is_perm_id(&"a".repeat(41)));
     }
 }

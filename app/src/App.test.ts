@@ -35,7 +35,7 @@ const finished: HookView = {
   enabled: true,
   answers: { untrackedDirty: false, sound: "Glass", clickToFocus: true },
   status: "ok",
-  needs: [{ id: "automation-terminal", status: "granted" }],
+  needs: [{ id: "automation-terminal", title: "Control Terminal", status: "granted" }],
 };
 
 const inputNeeded: HookView = {
@@ -45,7 +45,7 @@ const inputNeeded: HookView = {
   enabled: true,
   answers: { untrackedDirty: false, sound: "Ping", clickToFocus: true },
   status: "pending",
-  needs: [{ id: "automation-terminal", status: "denied" }],
+  needs: [{ id: "automation-terminal", title: "Control Terminal", status: "denied" }],
 };
 
 function fixture(over: Partial<Report> = {}): Report {
@@ -71,6 +71,8 @@ function fixture(over: Partial<Report> = {}): Report {
         steps: "Open System Settings → Privacy & Security → Automation → Personalization Setup, and turn on Terminal.",
         settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
         status: "denied",
+        askable: true,
+        unknownHint: "Couldn't check this yet. Terminal may not be running. Click Ask for permission to check again.",
         affects: ["Input needed"],
       },
     ],

@@ -16,10 +16,8 @@
     "not-asked": "Not asked yet",
     unknown: "Not checked yet",
   };
-  const permName: Record<PermId, string> = { "automation-terminal": "Control Terminal" };
 
   const canWrite = $derived(store.canWrite);
-  const title = (id: PermId) => report.pending.find((p) => p.id === id)?.title ?? permName[id] ?? id;
   const pendingFor = (id: PermId) => report.pending.some((p) => p.id === id);
 </script>
 
@@ -43,7 +41,7 @@
       <ul class="needs">
         {#each hook.needs as n (n.id)}
           <li>
-            <span class="perm">{title(n.id)}</span>
+            <span class="perm">{n.title}</span>
             <span class="perm-status" class:granted={n.status === "granted"}>{permText[n.status]}</span>
             {#if n.status !== "granted" && pendingFor(n.id)}
               <button type="button" class="link" onclick={() => (store.selection = { kind: "pending", id: n.id })}

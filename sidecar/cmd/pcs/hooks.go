@@ -21,8 +21,6 @@ import (
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/state"
 )
 
-const terminalBundleID = "com.apple.Terminal"
-
 // hookFlags are the flags shared by the commands that change one hook type
 // and print the fresh report.
 type hookFlags struct {
@@ -100,11 +98,13 @@ func saveSettings(f *settings.File, o settings.SaveOptions, what string) (string
 // buildReport reads everything fresh and checks the Automation permission.
 func buildReport() report.Report {
 	f, err := settings.Load(paths.SettingsPath())
-	auto := perms.CheckAutomation(terminalBundleID)
-	slog.Default().Info("permission check", "id", perms.AutomationTerminal, "status", auto)
-	return report.Build(f, err, loadState(), map[perms.ID]perms.Status{
-		perms.AutomationTerminal: auto,
-	})
+	have := map[perms.ID]perms.Status{}
+	for _, p := range perms.All() {
+		s := p.Check()
+		slog.Default().Info("permission check", "id", p.ID, "status", s)
+		have[p.ID] = s
+	}
+	return report.Build(f, err, loadState(), have)
 }
 
 // setHook writes the owned entries of d's type with answers a.

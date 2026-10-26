@@ -1,5 +1,5 @@
 export type HookType = "git-status" | "finished" | "input-needed";
-export type PermId = "automation-terminal";
+export type PermId = string;
 export type PermStatus = "granted" | "denied" | "not-asked" | "unknown";
 export type HookStatus = "ok" | "pending" | "off";
 
@@ -23,7 +23,7 @@ export interface HookView {
   enabled: boolean;
   answers: Answers;
   status: HookStatus;
-  needs: { id: PermId; status: PermStatus }[];
+  needs: { id: PermId; title: string; status: PermStatus }[];
 }
 
 export interface OtherHook {
@@ -38,6 +38,8 @@ export interface PendingItem {
   steps: string;
   settingsUrl: string;
   status: PermStatus;
+  askable: boolean;
+  unknownHint: string;
   affects: string[];
 }
 

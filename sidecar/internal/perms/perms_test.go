@@ -21,3 +21,33 @@ func TestStepsText(t *testing.T) {
 		}
 	}
 }
+
+func TestRegistry(t *testing.T) {
+	all := All()
+	if len(all) == 0 {
+		t.Fatal("empty registry")
+	}
+	for _, p := range all {
+		if p.Title == "" || p.Check == nil || p.Request == nil {
+			t.Errorf("incomplete entry %+v", p)
+		}
+		if p.Askable && p.UnknownHint == "" {
+			t.Errorf("%s: askable permission needs an UnknownHint", p.ID)
+		}
+	}
+	a := Lookup(AutomationTerminal)
+	if !a.Askable || a.UnknownHint != "Couldn't check this yet. Terminal may not be running. Click Ask for permission to check again." {
+		t.Errorf("automation entry = %+v", a)
+	}
+}
+
+func TestSetRegistryForTest(t *testing.T) {
+	restore := SetRegistryForTest([]Info{{ID: "x-y", Title: "X", Check: func() Status { return Granted }}})
+	if got := Lookup("x-y"); got.Title != "X" || got.Check() != Granted {
+		t.Errorf("lookup = %+v", got)
+	}
+	restore()
+	if Lookup("x-y").Title != "" {
+		t.Error("registry not restored")
+	}
+}
