@@ -16,8 +16,10 @@
     </div>
   </header>
 
-  {#if canAsk}
+  {#if item.status === "not-asked"}
     <p class="steps">macOS hasn't asked about this yet. Click Ask for permission, then choose Allow.</p>
+  {:else if item.status === "unknown"}
+    <p class="steps">Couldn't check this yet. Terminal may not be running. Click Ask for permission to check again.</p>
   {:else if item.steps}
     <p class="steps">{item.steps}</p>
   {/if}
