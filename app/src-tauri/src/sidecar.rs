@@ -76,6 +76,14 @@ async fn run_inner(app: &AppHandle, args: Vec<String>, timeout: Duration) -> Res
                     stdout.extend(b);
                     stdout.push(b'\n');
                 }
+                CommandEvent::Stderr(b) => {
+                    let text = String::from_utf8_lossy(&b);
+                    let line = text.trim();
+                    if !line.is_empty() {
+                        log::warn!("pcs {first} stderr: {line}");
+                    }
+                }
+                CommandEvent::Error(e) => log::error!("pcs {first}: {e}"),
                 CommandEvent::Terminated(p) => code = p.code,
                 _ => {}
             }
