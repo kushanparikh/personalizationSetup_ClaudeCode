@@ -8,6 +8,7 @@
   import AddHook from "./components/AddHook.svelte";
   import PendingDetail from "./components/PendingDetail.svelte";
   import OtherHooks from "./components/OtherHooks.svelte";
+  import UninstallDetail from "./components/UninstallDetail.svelte";
 
   const store = new AppStore();
 
@@ -19,6 +20,7 @@
     if (s.kind === "hook" && r.hooks.some((h) => h.type === s.type)) return s;
     if (s.kind === "add" && (s.type === null || r.available.some((d) => d.type === s.type))) return s;
     if (s.kind === "pending" && r.pending.some((p) => p.id === s.id)) return s;
+    if (s.kind === "uninstall") return s;
     if (s.kind === "other" && r.otherHooks.length > 0) return s;
     if (r.hooks.length > 0) return { kind: "hook", type: r.hooks[0].type };
     return { kind: "none" };
@@ -123,6 +125,8 @@
         {/key}
       {:else if item}
         <PendingDetail {store} {item} />
+      {:else if current.kind === "uninstall"}
+        <UninstallDetail {store} />
       {:else if current.kind === "other"}
         <OtherHooks hooks={store.report.otherHooks} />
       {:else if store.report.settingsError}

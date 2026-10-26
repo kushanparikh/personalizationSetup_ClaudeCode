@@ -6,6 +6,7 @@ export type Selection =
   | { kind: "add"; type: HookType | null }
   | { kind: "pending"; id: PermId }
   | { kind: "other" }
+  | { kind: "uninstall" }
   | { kind: "none" };
 
 export class AppStore {
@@ -14,6 +15,7 @@ export class AppStore {
   busy = $state(false);
   error = $state<string | null>(null);
   notice = $state<string | null>(null);
+  uninstalled = $state(false);
   serve = $state<ServeStatus>({ state: "starting" });
 
   get canWrite(): boolean {
@@ -84,6 +86,17 @@ export class AppStore {
       this.report = await api.remove(type);
       this.selection = { kind: "none" };
       this.notice = `Removed ${name}. Your settings.json was backed up first.`;
+    });
+  }
+
+  /** Removes the hooks, data and app. The backend then quits the app, so the window is about to close. */
+  uninstall(): Promise<void> {
+    if (!this.canWrite || this.uninstalled) return Promise.resolve();
+    return this.run(async () => {
+      const r = await api.uninstall();
+      this.uninstalled = true;
+      const n = r.removedHooks;
+      this.notice = `Uninstalled. Removed ${n} ${n === 1 ? "hook" : "hooks"}. Closing…`;
     });
   }
 

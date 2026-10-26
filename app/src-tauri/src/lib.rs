@@ -115,6 +115,7 @@ pub fn run() {
             commands::enable_hook,
             commands::disable_hook,
             commands::remove_hook,
+            commands::uninstall_app,
             commands::request_permission,
             commands::send_test,
             commands::open_settings,
