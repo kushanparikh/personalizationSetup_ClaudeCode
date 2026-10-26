@@ -12,6 +12,7 @@ pub struct Alert {
     pub sound: String,
     pub tty: String,
     pub bundle_id: String,
+    pub tone: String,
     pub focus: bool,
 }
 
@@ -24,6 +25,7 @@ impl Default for Alert {
             sound: String::new(),
             tty: String::new(),
             bundle_id: String::new(),
+            tone: String::new(),
             focus: false,
         }
     }
@@ -32,7 +34,7 @@ impl Default for Alert {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ServeLine {
     Ready,
-    Banner(Alert),
+    Toast(Alert),
     Panel(Alert),
     MovedOn(String),
     Error(String),
@@ -53,7 +55,7 @@ pub fn parse_line(line: &str) -> Option<ServeLine> {
     }
     let alert: Alert = serde_json::from_value(v).ok()?;
     match kind.as_str() {
-        "banner" => Some(ServeLine::Banner(alert)),
+        "toast" => Some(ServeLine::Toast(alert)),
         "panel" if !alert.session_id.is_empty() => Some(ServeLine::Panel(alert)),
         "moved_on" if !alert.session_id.is_empty() => Some(ServeLine::MovedOn(alert.session_id)),
         _ => None,
@@ -84,10 +86,11 @@ mod tests {
     }
 
     #[test]
-    fn parse_banner_without_session() {
-        let l = r#"{"v":1,"kind":"banner","title":"Claude Code — x","message":"Finished working","focus":false}"#;
+    fn parse_toast_without_session() {
+        let l = r#"{"v":1,"kind":"toast","title":"Claude Code — x","message":"Finished working","tone":"done","focus":false}"#;
         match parse_line(l) {
-            Some(ServeLine::Banner(a)) => {
+            Some(ServeLine::Toast(a)) => {
+                assert_eq!(a.tone, "done");
                 assert_eq!(a.session_id, "");
                 assert_eq!(a.message, "Finished working");
             }
@@ -120,8 +123,8 @@ mod tests {
             .collect();
         assert_eq!(parsed.len(), 5, "{parsed:?}");
         assert_eq!(parsed[0], ServeLine::Ready);
-        assert!(matches!(&parsed[1], ServeLine::Banner(a) if a.message == "Finished working" && a.session_id.is_empty()));
-        assert!(matches!(&parsed[2], ServeLine::Panel(a) if a.session_id == "s1" && a.focus && a.tty == "/dev/ttys003" && a.bundle_id == "com.apple.Terminal"));
+        assert!(matches!(&parsed[1], ServeLine::Toast(a) if a.message == "Finished working" && a.session_id.is_empty() && a.tone == "done"));
+        assert!(matches!(&parsed[2], ServeLine::Panel(a) if a.session_id == "s1" && a.focus && a.tty == "/dev/ttys003" && a.bundle_id == "com.apple.Terminal" && a.tone == "wait"));
         assert_eq!(parsed[3], ServeLine::MovedOn("s1".into()));
         assert_eq!(parsed[4], ServeLine::Error(crate::serve::ALREADY_RUNNING.into()));
     }

@@ -3,8 +3,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/svelte";
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
 import Alert from "./Alert.svelte";
-
-type View = { kind: "panel" | "toast"; title: string; message: string; focus: boolean };
+import type { AlertView as View } from "../lib/types";
 
 function setup(label: string, view: View) {
   window.history.replaceState(null, "", `/alert.html?label=${label}`);
@@ -25,6 +24,7 @@ const count = (calls: { cmd: string }[], cmd: string) => calls.filter((c) => c.c
 
 const panel = (over: Partial<View> = {}): View => ({
   kind: "panel",
+  tone: "wait",
   title: "Claude Code — graphql-testing-framework",
   message: "Claude needs your permission to use Bash",
   focus: true,
@@ -42,13 +42,28 @@ describe("Alert", () => {
   });
 
   it("toast_shows_finished_copy", async () => {
-    setup("toast-1", { kind: "toast", title: "Claude Code — proj-x", message: "Finished working", focus: false });
+    setup("toast-1", { kind: "toast", tone: "done", title: "Claude Code — proj-x", message: "Finished working", focus: false });
     const project = await screen.findByText("proj-x");
     expect(project.classList.contains("project")).toBe(true);
     expect(screen.getByText("Claude Code")).toBeTruthy();
     const body = screen.getByText("Finished working");
     expect(body.classList.contains("body")).toBe(true);
     expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+  });
+
+  it("tone_sets_data_tone_and_lamp", async () => {
+    setup("toast-1", { kind: "toast", tone: "danger", title: "Claude Code — p", message: "Hook failed", focus: false });
+    await screen.findByText("Hook failed");
+    const root = document.querySelector(".alert") as HTMLElement;
+    expect(root.dataset.tone).toBe("danger");
+    // kind still decides behaviour: a toast has no dismiss button, whatever its tone.
+    expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
+  });
+
+  it("default_tones_match_todays_look", async () => {
+    setup("panel-a", panel());
+    await screen.findByText("graphql-testing-framework");
+    expect((document.querySelector(".alert") as HTMLElement).dataset.tone).toBe("wait");
   });
 
   it("panel_footer_reflects_focus", async () => {

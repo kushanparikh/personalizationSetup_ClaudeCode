@@ -67,3 +67,13 @@ export const SOUNDS = [
   "none", "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero",
   "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink",
 ] as const;
+
+/** What an alert window renders. `kind` is behaviour (panel = sticky, toast = timed); `tone` is look (lamp colour). */
+export type AlertView = {
+  kind: "panel" | "toast";
+  /** "wait" | "done" | "danger"; the Rust side defaults it by kind. Unknown tones render as wait. */
+  tone: string;
+  title: string;
+  message: string;
+  focus: boolean;
+};

@@ -114,7 +114,7 @@ func TestServeDropsInvalid(t *testing.T) {
 	s := startServe(t, sock)
 	s.next(t)
 	rawSend(t, sock, `{"v":1,"kind":"x","focus":false}`+"\n")
-	rawSend(t, sock, `{"v":1,"kind":"banner","message":"`+strings.Repeat("a", 70*1024)+`","focus":false}`+"\n")
+	rawSend(t, sock, `{"v":1,"kind":"toast","message":"`+strings.Repeat("a", 70*1024)+`","focus":false}`+"\n")
 	rawSend(t, sock, "not json\n")
 	rawSend(t, sock, `{"v":1,"kind":"ready","focus":false}`+"\n")
 	s.none(t)
@@ -126,11 +126,12 @@ func TestServeDropsInvalid(t *testing.T) {
 
 func TestValidate(t *testing.T) {
 	bad := []Event{
-		{V: 2, Kind: KindBanner},
+		{V: 2, Kind: KindToast},
 		{V: 1, Kind: KindReady},
 		{V: 1, Kind: KindPanel},
 		{V: 1, Kind: KindMovedOn},
-		{V: 1, Kind: KindBanner, Message: strings.Repeat("a", 1001)},
+		{V: 1, Kind: KindToast, Message: strings.Repeat("a", 1001)},
+		{V: 1, Kind: KindToast, Tone: "purple"},
 	}
 	for _, e := range bad {
 		if e.Validate() == nil {
@@ -138,10 +139,13 @@ func TestValidate(t *testing.T) {
 		}
 	}
 	good := []Event{
-		{V: 1, Kind: KindBanner},
+		{V: 1, Kind: KindToast},
 		{V: 1, Kind: KindPanel, SessionID: "s"},
 		{V: 1, Kind: KindMovedOn, SessionID: "s"},
-		{V: 1, Kind: KindBanner, Message: strings.Repeat("é", 1000)},
+		{V: 1, Kind: KindToast, Message: strings.Repeat("é", 1000)},
+		{V: 1, Kind: KindToast, Tone: ToneWait},
+		{V: 1, Kind: KindToast, Tone: ToneDone},
+		{V: 1, Kind: KindToast, Tone: ToneDanger},
 	}
 	for _, e := range good {
 		if err := e.Validate(); err != nil {
@@ -228,13 +232,13 @@ func TestSendLaunchesOnceThenDelivers(t *testing.T) {
 			return nil
 		},
 	}
-	e := Event{V: 1, Kind: KindBanner, Title: "T", Message: "Finished working"}
+	e := Event{V: 1, Kind: KindToast, Title: "T", Message: "Finished working"}
 	if err := c.Send(e, true); err != nil {
 		t.Fatal(err)
 	}
 	<-started
 	s.next(t) // ready
-	want := `{"v":1,"kind":"banner","title":"T","message":"Finished working","focus":false}`
+	want := `{"v":1,"kind":"toast","title":"T","message":"Finished working","focus":false}`
 	if got := s.next(t); got != want {
 		t.Fatalf("got %q", got)
 	}
@@ -249,7 +253,7 @@ func TestSendNoLaunchFailsFast(t *testing.T) {
 	c := &Client{Socket: sock, DialTimeout: 200 * time.Millisecond, LaunchWait: 3 * time.Second,
 		Launch: func() error { calls.Add(1); return nil }}
 	start := time.Now()
-	err := c.Send(Event{V: 1, Kind: KindBanner}, false)
+	err := c.Send(Event{V: 1, Kind: KindToast}, false)
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -266,7 +270,7 @@ func TestSendLaunchErrorWrappedWhenStillDown(t *testing.T) {
 	boom := errors.New("boom")
 	c := &Client{Socket: sock, DialTimeout: 50 * time.Millisecond, LaunchWait: 300 * time.Millisecond,
 		Launch: func() error { return boom }}
-	err := c.Send(Event{V: 1, Kind: KindBanner}, true)
+	err := c.Send(Event{V: 1, Kind: KindToast}, true)
 	if !errors.Is(err, boom) {
 		t.Fatalf("err = %v", err)
 	}
@@ -313,7 +317,7 @@ func TestSendLaunchBounded(t *testing.T) {
 	c := &Client{Socket: sock, DialTimeout: 100 * time.Millisecond, LaunchWait: 300 * time.Millisecond,
 		Launch: func() error { defer wg.Done(); time.Sleep(5 * time.Second); return nil }}
 	start := time.Now()
-	if err := c.Send(Event{V: 1, Kind: KindBanner}, true); err == nil {
+	if err := c.Send(Event{V: 1, Kind: KindToast}, true); err == nil {
 		t.Fatal("expected error")
 	}
 	if d := time.Since(start); d > 1200*time.Millisecond {

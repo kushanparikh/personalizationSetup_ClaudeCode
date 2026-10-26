@@ -22,10 +22,16 @@ import (
 )
 
 const (
-	KindBanner  = "banner"
+	KindToast   = "toast"
 	KindPanel   = "panel"
 	KindMovedOn = "moved_on"
 	KindReady   = "ready" // emitted by Serve only
+
+	// Tone is the look of an alert (lamp colour); Kind is its behaviour.
+	// "" means the app picks a default for the kind.
+	ToneWait   = "wait"
+	ToneDone   = "done"
+	ToneDanger = "danger"
 
 	maxLine        = 64 * 1024
 	maxMessageRune = 1000
@@ -47,6 +53,7 @@ type Event struct {
 	Sound     string `json:"sound,omitempty"`
 	TTY       string `json:"tty,omitempty"`
 	BundleID  string `json:"bundleId,omitempty"`
+	Tone      string `json:"tone,omitempty"`
 	Focus     bool   `json:"focus"`
 }
 
@@ -56,13 +63,18 @@ func (e Event) Validate() error {
 		return fmt.Errorf("unsupported version %d", e.V)
 	}
 	switch e.Kind {
-	case KindBanner:
+	case KindToast:
 	case KindPanel, KindMovedOn:
 		if e.SessionID == "" {
 			return fmt.Errorf("kind %q requires sessionId", e.Kind)
 		}
 	default:
 		return fmt.Errorf("invalid kind %q", e.Kind)
+	}
+	switch e.Tone {
+	case "", ToneWait, ToneDone, ToneDanger:
+	default:
+		return fmt.Errorf("invalid tone %q", e.Tone)
 	}
 	if utf8.RuneCountInString(e.Message) > maxMessageRune {
 		return errors.New("message too long")

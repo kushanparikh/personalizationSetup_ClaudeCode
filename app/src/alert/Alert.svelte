@@ -3,8 +3,7 @@
   import { invoke } from "@tauri-apps/api/core";
   import { listen } from "@tauri-apps/api/event";
   import { splitTitle } from "../lib/title";
-
-  type AlertView = { kind: "panel" | "toast"; title: string; message: string; focus: boolean };
+  import type { AlertView } from "../lib/types";
 
   const label = new URLSearchParams(window.location.search).get("label") ?? "";
 
@@ -58,6 +57,7 @@
     class="alert"
     class:panel={isPanel}
     class:toast={!isPanel}
+    data-tone={view.tone}
     role="button"
     tabindex="0"
     title={footer}
@@ -121,8 +121,14 @@
     cursor: pointer;
     outline: none;
   }
-  .alert.toast {
+  .alert[data-tone="wait"] {
+    --lamp: var(--c-lamp-wait);
+  }
+  .alert[data-tone="done"] {
     --lamp: var(--c-lamp-done);
+  }
+  .alert[data-tone="danger"] {
+    --lamp: var(--c-lamp-danger);
   }
   .alert:hover {
     background: var(--c-hover);

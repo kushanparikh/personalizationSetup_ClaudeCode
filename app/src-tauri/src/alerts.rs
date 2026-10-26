@@ -26,6 +26,8 @@ pub struct Alerts(Mutex<Board>);
 #[serde(rename_all = "camelCase")]
 pub struct AlertView {
     kind: Kind,
+    /// Look of the alert (lamp colour). Defaulted by kind when the sidecar sends none.
+    tone: String,
     title: String,
     message: String,
     focus: bool,
@@ -33,8 +35,14 @@ pub struct AlertView {
 
 impl From<&Shown> for AlertView {
     fn from(s: &Shown) -> Self {
+        let tone = match (s.alert.tone.as_str(), s.kind) {
+            ("", Kind::Panel) => "wait",
+            ("", Kind::Toast) => "done",
+            (t, _) => t,
+        };
         AlertView {
             kind: s.kind,
+            tone: tone.to_string(),
             title: s.alert.title.clone(),
             message: s.alert.message.clone(),
             focus: s.alert.focus,
@@ -62,7 +70,7 @@ pub fn handle(app: &AppHandle, line: ServeLine) {
     };
     match line {
         ServeLine::Panel(alert) => run(Box::new(move |b| b.panel(alert))),
-        ServeLine::Banner(alert) => run(Box::new(move |b| b.toast(alert))),
+        ServeLine::Toast(alert) => run(Box::new(move |b| b.toast(alert))),
         ServeLine::MovedOn(sid) => run(Box::new(move |b| b.moved_on(&sid))),
         ServeLine::Ready | ServeLine::Error(_) => {}
     }
@@ -253,7 +261,19 @@ mod tests {
         let v = serde_json::to_value(AlertView::from(&s)).unwrap();
         assert_eq!(
             v,
-            serde_json::json!({"kind":"panel","title":"Claude Code — x","message":"m","focus":true})
+            serde_json::json!({"kind":"panel","tone":"wait","title":"Claude Code — x","message":"m","focus":true})
         );
+    }
+
+    #[test]
+    fn alert_view_defaults_tone_by_kind() {
+        let view = |kind, tone: &str| {
+            let alert = Alert { tone: tone.into(), ..Alert::default() };
+            AlertView::from(&Shown { label: "l".into(), kind, alert }).tone
+        };
+        assert_eq!(view(Kind::Panel, ""), "wait");
+        assert_eq!(view(Kind::Toast, ""), "done");
+        assert_eq!(view(Kind::Toast, "danger"), "danger");
+        assert_eq!(view(Kind::Panel, "done"), "done");
     }
 }

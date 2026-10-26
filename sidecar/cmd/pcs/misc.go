@@ -91,9 +91,9 @@ func cmdSendTest(args []string) (any, error) {
 		}
 		return map[string]any{"preview": line}, nil
 	case hooktypes.Finished:
-		ev = ipc.Event{V: 1, Kind: ipc.KindBanner, Title: testTitle, Message: "Finished working", Sound: soundName(a.Sound)}
+		ev = ipc.Event{V: 1, Kind: ipc.KindToast, Title: testTitle, Message: "Finished working", Tone: ipc.ToneDone, Sound: soundName(a.Sound)}
 	case hooktypes.InputNeeded:
-		ev = ipc.Event{V: 1, Kind: ipc.KindPanel, Title: testTitle, Message: testMessage, Sound: soundName(a.Sound), SessionID: "test"}
+		ev = ipc.Event{V: 1, Kind: ipc.KindPanel, Title: testTitle, Message: testMessage, Tone: ipc.ToneWait, Sound: soundName(a.Sound), SessionID: "test"}
 	}
 	if err := ipc.DefaultClient().Send(ev, false); err != nil {
 		slog.Default().Warn("send-test delivery failed", "type", d.Type, "err", err)

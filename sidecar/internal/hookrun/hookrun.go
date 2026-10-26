@@ -90,7 +90,7 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 			log.Warn("write failed", "err", err)
 		}
 	case "stop":
-		e := ipc.Event{V: 1, Kind: ipc.KindBanner, Title: title(in, getenv), Message: "Finished working",
+		e := ipc.Event{V: 1, Kind: ipc.KindToast, Title: title(in, getenv), Message: "Finished working", Tone: ipc.ToneDone,
 			Sound: sound(a.Sound), Focus: a.ClickToFocus}
 		if a.ClickToFocus {
 			e.TTY = d.TTY()
@@ -105,7 +105,7 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 		if r := []rune(msg); len(r) > maxMessage {
 			msg = string(r[:maxMessage])
 		}
-		e := ipc.Event{V: 1, Kind: ipc.KindPanel, Title: title(in, getenv), Message: msg,
+		e := ipc.Event{V: 1, Kind: ipc.KindPanel, Title: title(in, getenv), Message: msg, Tone: ipc.ToneWait,
 			Sound: sound(a.Sound), Focus: a.ClickToFocus, SessionID: in.SessionID}
 		if a.ClickToFocus {
 			e.TTY = d.TTY()

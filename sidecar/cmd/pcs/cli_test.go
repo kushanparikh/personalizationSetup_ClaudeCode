@@ -599,8 +599,8 @@ func TestServeLinesGolden(t *testing.T) {
 	got := []string{next()} // ready
 	c := &ipc.Client{Socket: filepath.Join(home, ".pcs", "run", "app.sock"), DialTimeout: time.Second}
 	for _, ev := range []ipc.Event{
-		{V: 1, Kind: ipc.KindBanner, Title: "Claude Code — demo", Message: "Finished working", Sound: "Glass"},
-		{V: 1, Kind: ipc.KindPanel, SessionID: "s1", Title: "Claude Code — demo", Message: "Needs input", Sound: "Ping", TTY: "/dev/ttys003", BundleID: "com.apple.Terminal", Focus: true},
+		{V: 1, Kind: ipc.KindToast, Title: "Claude Code — demo", Message: "Finished working", Tone: ipc.ToneDone, Sound: "Glass"},
+		{V: 1, Kind: ipc.KindPanel, SessionID: "s1", Title: "Claude Code — demo", Message: "Needs input", Tone: ipc.ToneWait, Sound: "Ping", TTY: "/dev/ttys003", BundleID: "com.apple.Terminal", Focus: true},
 		{V: 1, Kind: ipc.KindMovedOn, SessionID: "s1"},
 	} {
 		if err := c.Send(ev, false); err != nil {

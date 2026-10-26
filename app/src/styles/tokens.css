@@ -18,6 +18,7 @@
   --c-hover: #e8ecf1;
   --c-lamp-wait: #d9960c; /* sodium: needs your input */
   --c-lamp-done: #2f8f7b; /* verdigris: finished */
+  --c-lamp-danger: #d23a2a; /* signal red: something failed */
   --c-danger: #c2412d;
   --c-focus: #3a6fd8;
 
@@ -62,6 +63,7 @@
     --c-hover: #2a323e;
     --c-lamp-wait: #f2b53a;
     --c-lamp-done: #4fb59f;
+    --c-lamp-danger: #f0604d;
     --c-danger: #ef7a66;
     --c-focus: #7aa2f0;
     --c-sidebar: #171c23;
