@@ -1,0 +1,5 @@
+{"v":1,"kind":"ready","focus":false}
+{"v":1,"kind":"banner","title":"Claude Code — demo","message":"Finished working","sound":"Glass","focus":false}
+{"v":1,"kind":"panel","sessionId":"s1","title":"Claude Code — demo","message":"Needs input","sound":"Ping","tty":"/dev/ttys003","bundleId":"com.apple.Terminal","focus":true}
+{"v":1,"kind":"moved_on","sessionId":"s1","focus":false}
+{"error":"already running"}

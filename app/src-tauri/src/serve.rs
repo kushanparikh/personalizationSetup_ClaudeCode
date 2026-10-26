@@ -11,6 +11,8 @@ use crate::events::{parse_line, ServeLine};
 
 pub const STATUS_EVENT: &str = "serve-status";
 const MAX_LINE: usize = 64 * 1024;
+/// The message `pcs serve` prints when another server owns the socket.
+pub const ALREADY_RUNNING: &str = "already running";
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(tag = "state", rename_all = "camelCase")]
@@ -26,7 +28,7 @@ pub fn backoff(attempt: u32) -> Duration {
 }
 
 pub fn status_from_exit(last_error: Option<&str>, code: Option<i32>) -> ServeStatus {
-    let reason = if last_error == Some("already running") {
+    let reason = if last_error == Some(ALREADY_RUNNING) {
         "Another program is already listening for hook alerts. Quit it and Personalization Setup will retry."
             .to_string()
     } else {
@@ -158,6 +160,17 @@ mod tests {
             }
             s => panic!("{s:?}"),
         }
+    }
+
+    #[test]
+    fn serve_status_json() {
+        use serde_json::{json, to_value};
+        assert_eq!(
+            to_value(ServeStatus::Down { reason: "x".into() }).unwrap(),
+            json!({"state": "down", "reason": "x"})
+        );
+        assert_eq!(to_value(ServeStatus::Ready).unwrap(), json!({"state": "ready"}));
+        assert_eq!(to_value(ServeStatus::Starting).unwrap(), json!({"state": "starting"}));
     }
 
     #[test]

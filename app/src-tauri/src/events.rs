@@ -112,6 +112,21 @@ mod tests {
     }
 
     #[test]
+    fn golden_serve_lines_parse() {
+        let golden = include_str!("../../../sidecar/internal/ipc/testdata/serve-lines.golden.jsonl");
+        let parsed: Vec<ServeLine> = golden
+            .lines()
+            .map(|l| parse_line(l).unwrap_or_else(|| panic!("golden line does not parse: {l}")))
+            .collect();
+        assert_eq!(parsed.len(), 5, "{parsed:?}");
+        assert_eq!(parsed[0], ServeLine::Ready);
+        assert!(matches!(&parsed[1], ServeLine::Banner(a) if a.message == "Finished working" && a.session_id.is_empty()));
+        assert!(matches!(&parsed[2], ServeLine::Panel(a) if a.session_id == "s1" && a.focus && a.tty == "/dev/ttys003" && a.bundle_id == "com.apple.Terminal"));
+        assert_eq!(parsed[3], ServeLine::MovedOn("s1".into()));
+        assert_eq!(parsed[4], ServeLine::Error(crate::serve::ALREADY_RUNNING.into()));
+    }
+
+    #[test]
     fn parse_ignores() {
         for l in [
             "{}",

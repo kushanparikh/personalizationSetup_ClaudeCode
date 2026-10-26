@@ -4,6 +4,19 @@ import { mockIPC } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
 import App from "./App.svelte";
 import type { HookView, Report } from "./lib/types";
+import golden from "../../sidecar/internal/report/testdata/report.golden.json";
+
+// Maps string-literal unions to string, which is all JSON import types give us.
+type Widen<T> = T extends string
+  ? string
+  : T extends (infer U)[]
+    ? Widen<U>[]
+    : T extends object
+      ? { [K in keyof T]: Widen<T[K]> }
+      : T;
+// Fails `npm run check` if the Go golden stops fitting `Report` (e.g. steps: string[]).
+const _goldenFitsReport: Widen<Report> = golden;
+void _goldenFitsReport;
 
 const gitStatus: HookView = {
   type: "git-status",
@@ -54,7 +67,7 @@ function fixture(over: Partial<Report> = {}): Report {
     pending: [
       {
         id: "automation-terminal",
-        title: "Let the app control Terminal",
+        title: "Control Terminal",
         steps: "Open System Settings → Privacy & Security → Automation → Personalization Setup, and turn on Terminal.",
         settingsUrl: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
         status: "denied",
@@ -103,6 +116,19 @@ describe("App", () => {
     expect(other.getAttribute("aria-expanded")).toBe("true");
     expect(await screen.findByText("echo one")).toBeTruthy();
     expect(screen.getByText("echo three")).toBeTruthy();
+  });
+
+  it("golden_report_renders", async () => {
+    // Status "denied" so the pending detail shows Go's own `steps` text.
+    const rep = structuredClone(golden) as unknown as Report;
+    rep.pending[0].status = "denied";
+    setup(rep);
+    const list = await myHooks();
+    for (const h of rep.hooks) expect(within(list).getByText(h.name)).toBeTruthy();
+    const pending = screen.getByRole("list", { name: "Pending" });
+    await fireEvent.click(within(pending).getByText(rep.pending[0].title));
+    expect(typeof rep.pending[0].steps).toBe("string");
+    expect(await screen.findByText(rep.pending[0].steps)).toBeTruthy();
   });
 
   it("add_menu_lists_available_only", async () => {
@@ -155,7 +181,7 @@ describe("App", () => {
     const calls = setup(rep);
     await myHooks();
     const pending = screen.getByRole("list", { name: "Pending" });
-    await fireEvent.click(within(pending).getByText("Let the app control Terminal"));
+    await fireEvent.click(within(pending).getByText("Control Terminal"));
     expect(
       await screen.findByText("Open System Settings → Privacy & Security → Automation → Personalization Setup, and turn on Terminal."),
     ).toBeTruthy();
@@ -170,7 +196,7 @@ describe("App", () => {
     rep.pending[0].status = "unknown";
     setup(rep);
     await myHooks();
-    await fireEvent.click(within(screen.getByRole("list", { name: "Pending" })).getByText("Let the app control Terminal"));
+    await fireEvent.click(within(screen.getByRole("list", { name: "Pending" })).getByText("Control Terminal"));
     expect(
       await screen.findByText("Couldn't check this yet. Terminal may not be running. Click Ask for permission to check again."),
     ).toBeTruthy();
@@ -193,7 +219,7 @@ describe("App", () => {
       get_state: () => (asked ? granted : rep),
     });
     await myHooks();
-    await fireEvent.click(within(screen.getByRole("list", { name: "Pending" })).getByText("Let the app control Terminal"));
+    await fireEvent.click(within(screen.getByRole("list", { name: "Pending" })).getByText("Control Terminal"));
     expect(await screen.findByText("macOS hasn't asked about this yet. Click Ask for permission, then choose Allow.")).toBeTruthy();
     await fireEvent.click(screen.getByRole("button", { name: "Ask for permission" }));
     await waitFor(() => expect(count(calls, "request_permission")).toBe(1));

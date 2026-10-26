@@ -1,0 +1,86 @@
+{
+  "hooks": [
+    {
+      "type": "git-status",
+      "name": "Git status on session start",
+      "description": "Shows the repo, branch and whether there are uncommitted changes when a Claude Code session starts.",
+      "enabled": true,
+      "answers": {
+        "untrackedDirty": true,
+        "sound": "",
+        "clickToFocus": false
+      },
+      "status": "ok",
+      "needs": []
+    },
+    {
+      "type": "finished",
+      "name": "Finished working",
+      "description": "A banner that slides away when Claude finishes. Click it to jump to that session's terminal tab.",
+      "enabled": true,
+      "answers": {
+        "untrackedDirty": false,
+        "sound": "Glass",
+        "clickToFocus": true
+      },
+      "status": "pending",
+      "needs": [
+        {
+          "id": "automation-terminal",
+          "status": "not-asked"
+        }
+      ]
+    },
+    {
+      "type": "input-needed",
+      "name": "Input needed",
+      "description": "A panel that stays on screen while Claude is waiting on you. Click it to jump to that session's terminal tab.",
+      "enabled": false,
+      "answers": {
+        "untrackedDirty": false,
+        "sound": "Ping",
+        "clickToFocus": true
+      },
+      "status": "off",
+      "needs": [
+        {
+          "id": "automation-terminal",
+          "status": "not-asked"
+        }
+      ]
+    }
+  ],
+  "available": [
+    {
+      "type": "input-needed",
+      "name": "Input needed",
+      "description": "A panel that stays on screen while Claude is waiting on you. Click it to jump to that session's terminal tab.",
+      "defaults": {
+        "untrackedDirty": false,
+        "sound": "Ping",
+        "clickToFocus": true
+      }
+    }
+  ],
+  "otherHooks": [
+    {
+      "event": "PreToolUse",
+      "matcher": "Bash",
+      "command": "echo one"
+    }
+  ],
+  "pending": [
+    {
+      "id": "automation-terminal",
+      "title": "Control Terminal",
+      "steps": "Open System Settings → Privacy & Security → Automation → Personalization Setup, and turn on Terminal.",
+      "settingsUrl": "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+      "status": "not-asked",
+      "affects": [
+        "Finished working"
+      ]
+    }
+  ],
+  "settingsError": "",
+  "logPath": "/tmp/pcs.log"
+}

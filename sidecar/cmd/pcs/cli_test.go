@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,9 +12,13 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/ipc"
 )
 
 var pcsBin string
+
+var update = flag.Bool("update", false, "rewrite testdata golden files")
 
 func TestMain(m *testing.M) {
 	dir, err := os.MkdirTemp("", "pcs-cli-test-")
@@ -539,5 +545,90 @@ func TestApplyRejectsUnknownAnswerKeys(t *testing.T) {
 	e.fail("apply", "--type", "finished", "--answers", `{"sound":"Glass"} {}`)
 	if e.settings() != userSettings {
 		t.Fatalf("settings changed:\n%s", e.settings())
+	}
+}
+
+// TestServeLinesGolden runs the real `pcs serve`, sends one event of each
+// kind through the real client, and compares what serve printed, plus the
+// line a second serve prints, with the golden the Rust tests also parse.
+func TestServeLinesGolden(t *testing.T) {
+	home, err := os.MkdirTemp("", "pcs") // short: unix socket paths are limited
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(home) })
+	e := &env{t: t, home: home}
+
+	cmd := exec.Command(pcsBin, "serve")
+	cmd.Env = e.environ()
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cmd.Start(); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { stdin.Close(); _ = cmd.Wait() })
+	lines := make(chan string, 16)
+	go func() {
+		sc := bufio.NewScanner(stdout)
+		for sc.Scan() {
+			lines <- sc.Text()
+		}
+		close(lines)
+	}()
+	next := func() string {
+		t.Helper()
+		select {
+		case l, ok := <-lines:
+			if !ok {
+				t.Fatal("serve closed stdout")
+			}
+			return l
+		case <-time.After(5 * time.Second):
+			t.Fatal("timed out waiting for a serve line")
+		}
+		return ""
+	}
+
+	got := []string{next()} // ready
+	c := &ipc.Client{Socket: filepath.Join(home, ".pcs", "run", "app.sock"), DialTimeout: time.Second}
+	for _, ev := range []ipc.Event{
+		{V: 1, Kind: ipc.KindBanner, Title: "Claude Code — demo", Message: "Finished working", Sound: "Glass"},
+		{V: 1, Kind: ipc.KindPanel, SessionID: "s1", Title: "Claude Code — demo", Message: "Needs input", Sound: "Ping", TTY: "/dev/ttys003", BundleID: "com.apple.Terminal", Focus: true},
+		{V: 1, Kind: ipc.KindMovedOn, SessionID: "s1"},
+	} {
+		if err := c.Send(ev, false); err != nil {
+			t.Fatal(err)
+		}
+		got = append(got, next())
+	}
+
+	out, code := e.run("", "serve")
+	if code != 1 {
+		t.Fatalf("second serve: exit %d: %s", code, out)
+	}
+	got = append(got, strings.TrimSuffix(out, "\n"))
+
+	body := strings.Join(got, "\n") + "\n"
+	golden := filepath.Join("..", "..", "internal", "ipc", "testdata", "serve-lines.golden.jsonl")
+	if *update {
+		if err := os.MkdirAll(filepath.Dir(golden), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(golden, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(want) != body {
+		t.Fatalf("serve lines differ from %s (run go test ./cmd/pcs ./internal/report -update)\ngot:\n%swant:\n%s", golden, body, want)
 	}
 }

@@ -3,6 +3,7 @@ package report
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"os"
 	"path/filepath"
 	"slices"
@@ -238,5 +239,71 @@ func TestJSONIsCamelCase(t *testing.T) {
 	}
 	if !strings.Contains(s, "Privacy & Security") || strings.Contains(s, "\\"+"u0026") {
 		t.Errorf("want a literal & in the output: %s", s)
+	}
+}
+
+var update = flag.Bool("update", false, "rewrite testdata golden files")
+
+const goldenSettings = `{
+  "hooks": {
+    "PreToolUse": [
+      {"matcher": "Bash", "hooks": [{"type": "command", "command": "echo one"}]}
+    ]
+  }
+}
+`
+
+// TestReportGolden pins the JSON the app reads. The Rust and TS tests read
+// the same file, so a shape change here fails them until the golden is
+// regenerated (go test ./cmd/pcs ./internal/report -update) and the consumers are fixed.
+func TestReportGolden(t *testing.T) {
+	f, err := load(t, goldenSettings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	setOwned(t, f, hooktypes.GitStatus, hooktypes.Answers{UntrackedDirty: true, Sound: "Glass", ClickToFocus: true})
+	setOwned(t, f, hooktypes.Finished, hooktypes.Answers{Sound: "Glass", ClickToFocus: true})
+	st := emptyStore()
+	// Stored but not enabled: status "off".
+	st.Hooks[hooktypes.InputNeeded] = hooktypes.Answers{Sound: "Ping", ClickToFocus: true}
+	have := map[perms.ID]perms.Status{perms.AutomationTerminal: perms.NotAsked}
+
+	r := Build(f, nil, st, have)
+	// Only three hook types exist and each status needs its own, so no type is
+	// left over for "available". Add one real def to pin that shape too.
+	d, _ := hooktypes.Get(hooktypes.InputNeeded)
+	r.Available = append(r.Available, d)
+	r.LogPath = "/tmp/pcs.log" // machine-specific otherwise
+
+	seen := map[string]bool{}
+	for _, h := range r.Hooks {
+		seen[h.Status] = true
+	}
+	if !seen[StatusOK] || !seen[StatusPending] || !seen[StatusOff] || len(r.OtherHooks) != 1 || len(r.Pending) != 1 {
+		t.Fatalf("golden input does not cover every shape: %+v", r)
+	}
+
+	var b bytes.Buffer
+	enc := json.NewEncoder(&b)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(r); err != nil {
+		t.Fatal(err)
+	}
+	golden := filepath.Join("testdata", "report.golden.json")
+	if *update {
+		if err := os.MkdirAll("testdata", 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(golden, b.Bytes(), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want, err := os.ReadFile(golden)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(want, b.Bytes()) {
+		t.Fatalf("report JSON differs from %s (run go test ./cmd/pcs ./internal/report -update)\ngot:\n%s\nwant:\n%s", golden, b.Bytes(), want)
 	}
 }
