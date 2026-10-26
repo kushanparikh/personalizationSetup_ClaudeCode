@@ -271,7 +271,7 @@ describe("App", () => {
 
   it("sidebar_explains_the_missing_dock_icon", async () => {
     setup(fixture());
-    expect(await screen.findByText("No Dock icon. Open again from Spotlight. ⌘Q quits.")).toBeTruthy();
+    expect(await screen.findByText("No Dock icon. Use the menu-bar icon or Spotlight. ⌘Q quits.")).toBeTruthy();
   });
 
   it("pending_not_asked_offers_the_prompt", async () => {
@@ -358,6 +358,50 @@ describe("App", () => {
     await waitFor(() => expect(count(calls, "remove_hook")).toBe(1));
     expect(calls.find((c) => c.cmd === "remove_hook")?.args).toEqual({ hookType: "finished" });
     expect(await screen.findByText("Removed Finished working. Your settings.json was backed up first.")).toBeTruthy();
+  });
+
+  it("uninstall_confirms_inline_then_calls_backend", async () => {
+    const calls = setup(fixture(), { uninstall_app: () => ({ removedHooks: 2, backup: "/b/settings.json.bak" }) });
+    await myHooks();
+    await fireEvent.click(screen.getByRole("button", { name: "Uninstall…" }));
+    expect(screen.getByRole("heading", { name: "Uninstall Personalization Setup" })).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Removes this app's hooks from ~/.claude/settings.json, then the app, its saved answers and its logs. Your other hooks and settings are kept, and a backup of settings.json is saved next to it.",
+      ),
+    ).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+    expect(screen.getByText("Uninstall now? This can't be undone.")).toBeTruthy();
+    expect(count(calls, "uninstall_app")).toBe(0);
+    await fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByText("Uninstall now? This can't be undone.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Uninstall" })).toBeTruthy();
+    await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+    await waitFor(() => expect(count(calls, "uninstall_app")).toBe(1));
+  });
+
+  it("uninstall_error_shows_banner", async () => {
+    setup(fixture(), {
+      uninstall_app: () => {
+        throw "pcs uninstall timed out after 15s";
+      },
+    });
+    await myHooks();
+    await fireEvent.click(screen.getByRole("button", { name: "Uninstall…" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+    await fireEvent.click(screen.getByRole("button", { name: "Uninstall" }));
+    expect(await screen.findByText("pcs uninstall timed out after 15s")).toBeTruthy();
+  });
+
+  it("uninstall_disabled_when_settings_invalid", async () => {
+    const calls = setup(fixture({ settingsError: "expected value at line 3 column 1" }));
+    await screen.findByText(/can't be read/);
+    await fireEvent.click(screen.getByRole("button", { name: "Uninstall…" }));
+    const btn = screen.getByRole("button", { name: "Uninstall" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    await fireEvent.click(btn);
+    expect(count(calls, "uninstall_app")).toBe(0);
   });
 
   it("refreshes_on_window_focus", async () => {

@@ -54,15 +54,58 @@ fn show_main(app: &AppHandle) {
     }
 }
 
+const TRAY_OPEN: &str = "open";
+const TRAY_QUIT: &str = "quit";
+
+/// Builds the menu-bar item. The returned handle must stay alive (it is
+/// stored in managed state), or the item disappears.
+fn build_tray(app: &tauri::App) -> tauri::Result<tauri::tray::TrayIcon> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    let open = MenuItem::with_id(app, TRAY_OPEN, "Open Personalization Setup", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, TRAY_QUIT, "Quit Personalization Setup", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &PredefinedMenuItem::separator(app)?, &quit])?;
+    let mut builder = tauri::tray::TrayIconBuilder::new()
+        .tooltip("Personalization Setup")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            TRAY_OPEN => show_main(app),
+            TRAY_QUIT => app.exit(0),
+            _ => {}
+        });
+    if let Some(icon) = app.default_window_icon() {
+        builder = builder.icon(icon.clone());
+    }
+    builder.build(app)
+}
+
+/// True when macOS runs this executable from an App Translocation mount
+/// (a quarantined app launched from where it was unpacked).
+fn is_translocated(exe: &Path) -> bool {
+    exe.to_string_lossy().contains("/AppTranslocation/")
+}
+
 /// Points `~/.pcs/bin/pcs-hook` at this bundle's `pcs`. Logged, never fatal.
+/// Skipped under App Translocation.
 async fn install_launcher(app: AppHandle) {
-    let bin = match std::env::current_exe() {
-        Ok(exe) => launcher_bin(&exe),
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
         Err(e) => {
             log::error!("install-launcher: cannot resolve current exe: {e}");
             return;
         }
     };
+    if is_translocated(&exe) {
+        // A translocated copy lives in a temporary read-only mount that is gone
+        // after a reboot; pointing the hooks there would silently break them.
+        log::error!(
+            "install-launcher: skipped, the app is running under App Translocation ({}); \
+             reinstall with ./install.sh so it runs from ~/Applications",
+            exe.display()
+        );
+        return;
+    }
+    let bin = launcher_bin(&exe);
     let cmd = match pcs_command(&app) {
         Ok(c) => c.args(["install-launcher", "--bin", &bin.to_string_lossy()]),
         Err(e) => {
@@ -115,6 +158,7 @@ pub fn run() {
             commands::enable_hook,
             commands::disable_hook,
             commands::remove_hook,
+            commands::uninstall_app,
             commands::request_permission,
             commands::send_test,
             commands::open_settings,
@@ -135,6 +179,8 @@ pub fn run() {
             // apps' full-screen Spaces, and the alerts must show there.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            let tray = build_tray(app)?;
+            app.manage(tray);
             if !background {
                 show_main(app.handle());
             }
@@ -180,5 +226,16 @@ mod tests {
             launcher_bin(Path::new("/A.app/Contents/MacOS/personalization-setup")),
             PathBuf::from("/A.app/Contents/MacOS/pcs")
         );
+    }
+
+    #[test]
+    fn is_translocated_detects_translocation_mount() {
+        assert!(is_translocated(Path::new(
+            "/private/var/folders/xy/abc/T/AppTranslocation/1234-ABCD/d/Personalization Setup.app/Contents/MacOS/personalization-setup"
+        )));
+        assert!(!is_translocated(Path::new(
+            "/Users/me/Applications/Personalization Setup.app/Contents/MacOS/personalization-setup"
+        )));
+        assert!(!is_translocated(Path::new("/Users/me/AppTranslocationNotes/x")));
     }
 }

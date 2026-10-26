@@ -150,7 +150,15 @@
     </section>
   {/if}
 
-  <p class="dockless">No Dock icon. Open again from Spotlight. ⌘Q quits.</p>
+  <div class="foot">
+    <p class="dockless">No Dock icon. Use the menu-bar icon or Spotlight. ⌘Q quits.</p>
+    <button
+      type="button"
+      class="uninstall"
+      aria-current={current.kind === "uninstall" ? "page" : undefined}
+      onclick={() => select({ kind: "uninstall" })}>Uninstall…</button
+    >
+  </div>
 </nav>
 
 <style>
@@ -185,8 +193,34 @@
     flex-direction: column;
     gap: 1px;
   }
+  .foot {
+    margin-top: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .uninstall {
+    margin: 0 8px;
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    font-size: var(--t-xs);
+    color: var(--c-muted);
+    text-decoration: underline;
+    cursor: default;
+  }
+  .uninstall:hover,
+  .uninstall[aria-current="page"] {
+    color: var(--c-ink);
+  }
+  .uninstall:focus-visible {
+    outline: 2px solid var(--c-focus);
+    outline-offset: 2px;
+  }
   .dockless {
-    margin: auto 8px 0;
+    margin: 0 8px;
     font-size: var(--t-xs);
     color: var(--c-muted);
     line-height: 1.35;

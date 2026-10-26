@@ -4,7 +4,7 @@ Tauri 2 desktop app (Svelte 5 + Vite + TypeScript frontend, Rust in `src-tauri`)
 
 ## Running the app
 
-The app has no Dock icon and no menu-bar item. To open it again, use Spotlight or `~/Applications`. Press ⌘Q while its window is focused to quit it. Any Claude Code hook starts it again in the background.
+The app has no Dock icon. To open it again, click its menu-bar icon (Open Personalization Setup), or use Spotlight or `~/Applications`. Press ⌘Q while its window is focused to quit it. Any Claude Code hook starts it again in the background.
 
 ## Prerequisites
 

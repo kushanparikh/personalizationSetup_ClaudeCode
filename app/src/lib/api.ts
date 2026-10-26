@@ -22,6 +22,8 @@ async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> 
   }
 }
 
+export type UninstallResult = { removedHooks: number; backup: string };
+
 export type SendTestResult = { sent: true } | { preview: string };
 
 export const api = {
@@ -33,6 +35,7 @@ export const api = {
   requestPermission: (id: PermId) => call<{ status: PermStatus }>("request_permission", { id }),
   sendTest: (hookType: HookType) => call<SendTestResult>("send_test", { hookType }),
   openSettings: (url: string) => call<void>("open_settings", { url }),
+  uninstall: () => call<UninstallResult>("uninstall_app"),
   openLog: () => call<void>("open_log"),
   serveStatus: () => call<ServeStatus>("serve_status"),
 };
