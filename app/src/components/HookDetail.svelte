@@ -32,7 +32,7 @@
   {#if hook.description}<p class="desc">{hook.description}</p>{/if}
 
   <div class="group">
-    <HookForm type={hook.type} bind:answers disabled={!canWrite} />
+    <HookForm questions={hook.questions} note={hook.note} bind:answers disabled={!canWrite} />
   </div>
 
   {#if hook.needs.length > 0}

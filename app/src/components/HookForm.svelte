@@ -1,42 +1,40 @@
 <script lang="ts">
-  import { SOUNDS, type Answers, type HookType } from "../lib/types";
+  import { SOUNDS, type Answers, type Question } from "../lib/types";
 
-  // The questions for one hook type (spec §5). The parent owns `answers`.
-  let { type, answers = $bindable(), disabled = false }: { type: HookType; answers: Answers; disabled?: boolean } =
-    $props();
+  // The questions pcs describes for one hook type (spec §5). The parent owns `answers`.
+  let {
+    questions,
+    note = "",
+    answers = $bindable(),
+    disabled = false,
+  }: { questions: Question[]; note?: string; answers: Answers; disabled?: boolean } = $props();
 
   const uid = $props.id();
-  const notifies = $derived(type === "finished" || type === "input-needed");
 </script>
 
 <fieldset class="form" {disabled}>
   <legend class="sr">Options</legend>
-  {#if type === "git-status"}
-    <label class="check">
-      <input type="checkbox" bind:checked={answers.untrackedDirty} />
-      <span>Count untracked files as dirty</span>
-    </label>
-  {:else}
-    <div class="field">
-      <label for="{uid}-sound">Sound</label>
-      <select id="{uid}-sound" bind:value={answers.sound}>
-        {#each SOUNDS as s (s)}
-          <option value={s}>{s === "none" ? "None" : s}</option>
-        {/each}
-      </select>
-    </div>
-    <label class="check">
-      <input type="checkbox" bind:checked={answers.clickToFocus} />
-      <span>Click focuses the session's terminal tab</span>
-    </label>
-  {/if}
+  {#each questions as q (q.key)}
+    {#if q.kind === "bool"}
+      <label class="check">
+        <input type="checkbox" bind:checked={answers[q.key] as boolean} />
+        <span>{q.label}</span>
+      </label>
+    {:else if q.kind === "sound"}
+      <div class="field">
+        <label for="{uid}-{q.key}">{q.label}</label>
+        <select id="{uid}-{q.key}" bind:value={answers[q.key] as string}>
+          {#each SOUNDS as s (s)}
+            <option value={s}>{s === "none" ? "None" : s}</option>
+          {/each}
+        </select>
+      </div>
+    {/if}
+  {/each}
 </fieldset>
 
-{#if notifies}
-  <p class="note">
-    If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and
-    Terminal comes forward.
-  </p>
+{#if note}
+  <p class="note">{note}</p>
 {/if}
 
 <style>

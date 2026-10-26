@@ -2,6 +2,7 @@ package hooktypes
 
 import (
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/perms"
@@ -155,5 +156,37 @@ func TestNeedsFinishedNoNotifications(t *testing.T) {
 	}
 	if got := Needs(Finished, Answers{Sound: "Glass"}); len(got) != 0 {
 		t.Errorf("no focus: got %#v", got)
+	}
+}
+
+// A typo'd or mistyped question key would silently drop an answer in the form.
+func TestQuestionKeysMatchAnswers(t *testing.T) {
+	fields := map[string]reflect.Kind{}
+	at := reflect.TypeOf(Answers{})
+	for i := 0; i < at.NumField(); i++ {
+		tag, _, _ := strings.Cut(at.Field(i).Tag.Get("json"), ",")
+		fields[tag] = at.Field(i).Type.Kind()
+	}
+	want := map[string]reflect.Kind{KindBool: reflect.Bool, KindSound: reflect.String}
+	for _, d := range All() {
+		if len(d.Questions) == 0 {
+			t.Errorf("%s has no questions", d.Type)
+		}
+		for _, q := range d.Questions {
+			k, ok := fields[q.Key]
+			if !ok {
+				t.Errorf("%s: question key %q is not an Answers json tag", d.Type, q.Key)
+				continue
+			}
+			wk, ok := want[q.Kind]
+			if !ok {
+				t.Errorf("%s: unknown question kind %q", d.Type, q.Kind)
+			} else if wk != k {
+				t.Errorf("%s: question %q kind %q needs a %v field, Answers has %v", d.Type, q.Key, q.Kind, wk, k)
+			}
+			if q.Label == "" {
+				t.Errorf("%s: question %q has no label", d.Type, q.Key)
+			}
+		}
 	}
 }

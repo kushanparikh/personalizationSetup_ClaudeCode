@@ -4,6 +4,13 @@
       "type": "git-status",
       "name": "Git status on session start",
       "description": "Shows the repo, branch and whether there are uncommitted changes when a Claude Code session starts.",
+      "questions": [
+        {
+          "key": "untrackedDirty",
+          "kind": "bool",
+          "label": "Count untracked files as dirty"
+        }
+      ],
       "enabled": true,
       "answers": {
         "untrackedDirty": true,
@@ -17,6 +24,19 @@
       "type": "finished",
       "name": "Finished working",
       "description": "A banner that slides away when Claude finishes. Click it to jump to that session's terminal tab.",
+      "questions": [
+        {
+          "key": "sound",
+          "kind": "sound",
+          "label": "Sound"
+        },
+        {
+          "key": "clickToFocus",
+          "kind": "bool",
+          "label": "Click focuses the session's terminal tab"
+        }
+      ],
+      "note": "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward.",
       "enabled": true,
       "answers": {
         "untrackedDirty": false,
@@ -36,6 +56,19 @@
       "type": "input-needed",
       "name": "Input needed",
       "description": "A panel that stays on screen while Claude is waiting on you. Click it to jump to that session's terminal tab.",
+      "questions": [
+        {
+          "key": "sound",
+          "kind": "sound",
+          "label": "Sound"
+        },
+        {
+          "key": "clickToFocus",
+          "kind": "bool",
+          "label": "Click focuses the session's terminal tab"
+        }
+      ],
+      "note": "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward.",
       "enabled": false,
       "answers": {
         "untrackedDirty": false,
@@ -61,7 +94,20 @@
         "untrackedDirty": false,
         "sound": "Ping",
         "clickToFocus": true
-      }
+      },
+      "questions": [
+        {
+          "key": "sound",
+          "kind": "sound",
+          "label": "Sound"
+        },
+        {
+          "key": "clickToFocus",
+          "kind": "bool",
+          "label": "Click focuses the session's terminal tab"
+        }
+      ],
+      "note": "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward."
     }
   ],
   "otherHooks": [

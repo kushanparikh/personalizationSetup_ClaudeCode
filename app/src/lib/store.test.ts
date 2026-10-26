@@ -12,6 +12,7 @@ function report(over: Partial<Report> = {}, perm: PermStatus = "not-asked", ok =
         type: "finished",
         name: "Finished working",
         description: "",
+        questions: [],
         enabled: true,
         answers,
         status: ok ? "ok" : "pending",

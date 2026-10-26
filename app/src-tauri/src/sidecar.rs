@@ -6,7 +6,14 @@ use serde_json::Value;
 use tauri::AppHandle;
 use tauri_plugin_shell::process::CommandEvent;
 
-pub const HOOK_TYPES: [&str; 3] = ["git-status", "finished", "input-needed"];
+/// Argument shape only (`^[a-z0-9-]{1,40}$`): `pcs` decides whether a hook type
+/// or permission id is real. Values are passed as separate argv entries, never
+/// through a shell, so this also stops a value reading as a flag (`--x`).
+pub fn is_id(id: &str) -> bool {
+    (1..=40).contains(&id.len())
+        && !id.starts_with('-')
+        && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+}
 
 /// Interprets `pcs` output: exactly one JSON object on stdout; on failure it
 /// is `{"error": "..."}` with a non-zero exit.
@@ -27,14 +34,14 @@ pub fn parse_output(code: Option<i32>, stdout: &[u8]) -> Result<Value, String> {
 }
 
 /// Builds argv for a hook command (`apply`, `enable`, `disable`, `remove`,
-/// `send-test`), rejecting unknown hook types.
+/// `send-test`), rejecting a hook type that is not shaped like an id.
 pub fn hook_args(
     cmd: &str,
     hook_type: &str,
     answers: Option<&Value>,
 ) -> Result<Vec<String>, String> {
-    if !HOOK_TYPES.contains(&hook_type) {
-        return Err(format!("unknown hook type: {hook_type}"));
+    if !is_id(hook_type) {
+        return Err(format!("invalid hook type: {hook_type}"));
     }
     let mut v = vec![cmd.to_string(), "--type".to_string(), hook_type.to_string()];
     if let Some(a) = answers {
@@ -140,7 +147,28 @@ mod tests {
     }
 
     #[test]
-    fn hook_args_rejects_unknown_type() {
+    fn id_charset() {
+        assert!(is_id("automation-terminal"));
+        assert!(is_id("a1"));
+        assert!(!is_id("a b"));
+        assert!(!is_id("../x"));
+        assert!(!is_id("--x"));
+        assert!(!is_id(""));
+        assert!(!is_id("Upper"));
+        assert!(!is_id(&"a".repeat(41)));
+    }
+
+    #[test]
+    fn hook_args_checks_type_shape() {
         assert!(hook_args("enable", "rm -rf", None).is_err());
+        assert!(hook_args("enable", "a b", None).is_err());
+        assert!(hook_args("enable", "--x", None).is_err());
+        assert!(hook_args("enable", "", None).is_err());
+        assert_eq!(
+            hook_args("enable", "git-status", None).unwrap(),
+            vec!["enable", "--type", "git-status"]
+        );
+        // A hook type added in Go needs no change here.
+        assert!(hook_args("enable", "some-new-type", None).is_ok());
     }
 }

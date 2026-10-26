@@ -32,13 +32,15 @@ type Report struct {
 
 // HookView is one of the app's hook types as the user has set it up.
 type HookView struct {
-	Type        hooktypes.Type    `json:"type"`
-	Name        string            `json:"name"`
-	Description string            `json:"description"`
-	Enabled     bool              `json:"enabled"`
-	Answers     hooktypes.Answers `json:"answers"`
-	Status      string            `json:"status"`
-	Needs       []Need            `json:"needs"`
+	Type        hooktypes.Type       `json:"type"`
+	Name        string               `json:"name"`
+	Description string               `json:"description"`
+	Questions   []hooktypes.Question `json:"questions"`
+	Note        string               `json:"note,omitempty"`
+	Enabled     bool                 `json:"enabled"`
+	Answers     hooktypes.Answers    `json:"answers"`
+	Status      string               `json:"status"`
+	Needs       []Need               `json:"needs"`
 }
 
 // Need is one permission a hook needs and its current status.
@@ -152,6 +154,7 @@ func Build(f *settings.File, loadErr error, st *state.Store, have map[perms.ID]p
 			continue
 		}
 		v := HookView{Type: d.Type, Name: d.Name, Description: d.Description,
+			Questions: d.Questions, Note: d.Note,
 			Enabled: enabled, Answers: a, Status: StatusOff, Needs: []Need{}}
 		for _, id := range hooktypes.Needs(d.Type, a) {
 			v.Needs = append(v.Needs, Need{ID: id, Title: perms.Lookup(id).Title, Status: status(id)})

@@ -7,7 +7,7 @@ use serde_json::{json, Value};
 use tauri::{AppHandle, State};
 use tokio::sync::Mutex;
 
-use crate::sidecar::{hook_args, run_pcs};
+use crate::sidecar::{hook_args, is_id, run_pcs};
 
 /// Serializes the commands that write config (settings.json, ~/.pcs).
 pub struct WriteLock(pub Mutex<()>);
@@ -18,12 +18,6 @@ const SETTINGS_PREFIX: &str = "x-apple.systempreferences:";
 
 pub fn is_settings_url(url: &str) -> bool {
     url.starts_with(SETTINGS_PREFIX)
-}
-
-/// Argument shape only: `pcs` decides whether the id names a real permission.
-fn is_perm_id(id: &str) -> bool {
-    (1..=40).contains(&id.len())
-        && id.bytes().all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
 }
 
 fn strs(v: &[&str]) -> Vec<String> {
@@ -94,7 +88,7 @@ pub async fn remove_hook(
 
 #[tauri::command]
 pub async fn request_permission(app: AppHandle, id: String) -> Result<Value, String> {
-    if !is_perm_id(&id) {
+    if !is_id(&id) {
         return Err(format!("invalid permission id: {id}"));
     }
     run_pcs(&app, strs(&["perm", "request", "--id", &id]), PERM_TIMEOUT).await
@@ -130,16 +124,5 @@ mod tests {
         ));
         assert!(!is_settings_url("https://evil"));
         assert!(!is_settings_url("file:///etc"));
-    }
-
-    #[test]
-    fn perm_id_charset() {
-        assert!(is_perm_id("automation-terminal"));
-        assert!(is_perm_id("a1"));
-        assert!(!is_perm_id("a b"));
-        assert!(!is_perm_id("../x"));
-        assert!(!is_perm_id(""));
-        assert!(!is_perm_id("Upper"));
-        assert!(!is_perm_id(&"a".repeat(41)));
     }
 }

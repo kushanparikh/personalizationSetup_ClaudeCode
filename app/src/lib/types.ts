@@ -1,4 +1,4 @@
-export type HookType = "git-status" | "finished" | "input-needed";
+export type HookType = string;
 export type PermId = string;
 export type PermStatus = "granted" | "denied" | "not-asked" | "unknown";
 export type HookStatus = "ok" | "pending" | "off";
@@ -9,17 +9,28 @@ export interface Answers {
   clickToFocus: boolean;
 }
 
+/** One thing the settings form asks, described by pcs. `key` is an Answers field; `kind` picks the control. */
+export interface Question {
+  key: keyof Answers;
+  kind: "bool" | "sound";
+  label: string;
+}
+
 export interface HookDef {
   type: HookType;
   name: string;
   description: string;
   defaults: Answers;
+  questions: Question[];
+  note?: string;
 }
 
 export interface HookView {
   type: HookType;
   name: string;
   description: string;
+  questions: Question[];
+  note?: string;
   enabled: boolean;
   answers: Answers;
   status: HookStatus;

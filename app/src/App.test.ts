@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/sve
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
 import App from "./App.svelte";
-import type { HookView, Report } from "./lib/types";
+import type { HookView, Question, Report } from "./lib/types";
 import golden from "../../sidecar/internal/report/testdata/report.golden.json";
 
 // Maps string-literal unions to string, which is all JSON import types give us.
@@ -18,10 +18,19 @@ type Widen<T> = T extends string
 const _goldenFitsReport: Widen<Report> = golden;
 void _goldenFitsReport;
 
+const SPACES_NOTE =
+  "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward.";
+const gitQs: Question[] = [{ key: "untrackedDirty", kind: "bool", label: "Count untracked files as dirty" }];
+const notifyQs: Question[] = [
+  { key: "sound", kind: "sound", label: "Sound" },
+  { key: "clickToFocus", kind: "bool", label: "Click focuses the session's terminal tab" },
+];
+
 const gitStatus: HookView = {
   type: "git-status",
   name: "Git status on session start",
   description: "Shows the repo, branch and whether it's clean when a session starts.",
+  questions: gitQs,
   enabled: true,
   answers: { untrackedDirty: true, sound: "Glass", clickToFocus: true },
   status: "ok",
@@ -32,6 +41,8 @@ const finished: HookView = {
   type: "finished",
   name: "Finished working",
   description: "A banner when Claude finishes and waits for you.",
+  questions: notifyQs,
+  note: SPACES_NOTE,
   enabled: true,
   answers: { untrackedDirty: false, sound: "Glass", clickToFocus: true },
   status: "ok",
@@ -42,6 +53,8 @@ const inputNeeded: HookView = {
   type: "input-needed",
   name: "Input needed",
   description: "A panel that stays until you answer Claude.",
+  questions: notifyQs,
+  note: SPACES_NOTE,
   enabled: true,
   answers: { untrackedDirty: false, sound: "Ping", clickToFocus: true },
   status: "pending",
@@ -57,6 +70,8 @@ function fixture(over: Partial<Report> = {}): Report {
         name: "Input needed",
         description: "A panel that stays until you answer Claude.",
         defaults: { untrackedDirty: false, sound: "Ping", clickToFocus: true },
+        questions: notifyQs,
+        note: SPACES_NOTE,
       },
     ],
     otherHooks: [
@@ -131,6 +146,26 @@ describe("App", () => {
     await fireEvent.click(within(pending).getByText(rep.pending[0].title));
     expect(typeof rep.pending[0].steps).toBe("string");
     expect(await screen.findByText(rep.pending[0].steps)).toBeTruthy();
+  });
+
+  it("golden_questions_render_controls", async () => {
+    // Every golden hook shows exactly the controls its questions describe, and the note only if it has one.
+    const rep = structuredClone(golden) as unknown as Report;
+    setup(rep);
+    const list = await myHooks();
+    for (const h of rep.hooks) {
+      await fireEvent.click(within(list).getByText(h.name));
+      for (const q of h.questions) {
+        expect(await screen.findByLabelText(q.label)).toBeTruthy();
+        expect(screen.getByLabelText(q.label).tagName).toBe(q.kind === "sound" ? "SELECT" : "INPUT");
+      }
+      const form = screen.getByRole("group", { name: "Options" });
+      expect(form.querySelectorAll("input, select")).toHaveLength(h.questions.length);
+      if (h.note) expect(screen.getByText(h.note)).toBeTruthy();
+      else expect(document.querySelector(".note")).toBeNull();
+    }
+    expect(rep.hooks.some((h) => h.note)).toBe(true);
+    expect(rep.hooks.some((h) => !h.note)).toBe(true);
   });
 
   it("add_menu_lists_available_only", async () => {
@@ -331,8 +366,7 @@ describe("App", () => {
   });
 
   it("spaces_note_on_notification_hooks", async () => {
-    const note =
-      "If that session's window is on another desktop or full-screen Space, macOS won't switch to it. The tab is selected and Terminal comes forward.";
+    const note = SPACES_NOTE;
     setup(fixture({ hooks: [gitStatus, finished, inputNeeded], available: [] }));
     const list = await myHooks();
     await fireEvent.click(within(list).getByText("Input needed"));
@@ -343,7 +377,7 @@ describe("App", () => {
   });
 
   it("empty_state_invites_add", async () => {
-    setup(fixture({ hooks: [], available: [{ type: "finished", name: "Finished working", description: "d", defaults: finished.answers }] }));
+    setup(fixture({ hooks: [], available: [{ type: "finished", name: "Finished working", description: "d", defaults: finished.answers, questions: notifyQs }] }));
     expect(await screen.findByText(/No hooks yet/)).toBeTruthy();
     expect(screen.getByRole("button", { name: "+ Add hook" })).toBeTruthy();
   });

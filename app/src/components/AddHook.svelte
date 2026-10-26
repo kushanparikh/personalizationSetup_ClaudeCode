@@ -21,7 +21,7 @@
   {#if def.description}<p class="desc">{def.description}</p>{/if}
 
   <div class="group">
-    <HookForm type={def.type} bind:answers disabled={!store.canWrite} />
+    <HookForm questions={def.questions} note={def.note} bind:answers disabled={!store.canWrite} />
   </div>
 
   <div class="actions">
