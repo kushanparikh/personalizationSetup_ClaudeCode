@@ -118,7 +118,7 @@ if [ -z "$want_sum" ] || [ "$want_sum" != "$have_sum" ]; then
   echo "The download is corrupt (checksum mismatch). Nothing was installed."
   exit 1
 fi
-# The checksum passed, so drop the browser's quarantine (D41): --noqtn on the
+# The checksum passed, so drop the browser's quarantine: --noqtn on the
 # extract keeps it off every file (a plain ditto copy would carry it over).
 mkdir -p "$TMP/x"
 if ! ditto --noqtn -x -k "$ZIP" "$TMP/x" 2>/dev/null || [ ! -e "$TMP/x/$APP_NAME.app/Contents/MacOS/pcs" ]; then
