@@ -46,7 +46,26 @@ fn log_dir() -> PathBuf {
     home.join("Library/Logs/Personalization Setup")
 }
 
+/// Dock icon only while the config window is open. A regular app's windows are
+/// kept off other apps' full-screen Spaces, so alerts need the accessory policy.
+fn set_dock_visible(app: &AppHandle, visible: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        let policy = if visible {
+            tauri::ActivationPolicy::Regular
+        } else {
+            tauri::ActivationPolicy::Accessory
+        };
+        if let Err(e) = app.set_activation_policy(policy) {
+            log::error!("set activation policy: {e}");
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = (app, visible);
+}
+
 fn show_main(app: &AppHandle) {
+    set_dock_visible(app, true);
     if let Some(w) = app.get_webview_window(MAIN_WINDOW) {
         let _ = w.show();
         let _ = w.unminimize();
@@ -131,7 +150,9 @@ pub fn run() {
                 log::info!("serve line: {line:?}");
                 alerts::handle(app, line);
             });
-            if !background {
+            if background {
+                set_dock_visible(app.handle(), false);
+            } else {
                 show_main(app.handle());
             }
             Ok(())
@@ -142,6 +163,7 @@ pub fn run() {
                 if window.label() == MAIN_WINDOW {
                     api.prevent_close();
                     let _ = window.hide();
+                    set_dock_visible(window.app_handle(), false);
                 }
             }
         })
