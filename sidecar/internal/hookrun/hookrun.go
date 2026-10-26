@@ -91,7 +91,7 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 		}
 	case "stop":
 		e := ipc.Event{V: 1, Kind: ipc.KindToast, Title: title(in, getenv), Message: "Finished working", Tone: ipc.ToneDone,
-			Sound: sound(a.Sound), Focus: a.ClickToFocus}
+			Sound: sound(a.Sound), Focus: a.ClickToFocus, SessionID: in.SessionID}
 		if a.ClickToFocus {
 			e.TTY = d.TTY()
 			e.BundleID = proc.TerminalBundleID(getenv)

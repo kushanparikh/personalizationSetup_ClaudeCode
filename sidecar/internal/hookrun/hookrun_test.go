@@ -68,17 +68,24 @@ func TestSessionStartGitFailsPrintsNothing(t *testing.T) {
 
 func TestStopToast(t *testing.T) {
 	r := &rec{}
-	run(t, "stop", []string{"--sound", "Glass", "--focus"}, `{"cwd":"/x/My Project"}`,
+	run(t, "stop", []string{"--sound", "Glass", "--focus"}, `{"session_id":"s7","cwd":"/x/My Project"}`,
 		r.deps(map[string]string{"__CFBundleIdentifier": "com.apple.Terminal", "TERM_PROGRAM": "Apple_Terminal"}))
 	want := ipc.Event{V: 1, Kind: ipc.KindToast, Title: "Claude Code — My Project", Message: "Finished working", Tone: ipc.ToneDone,
-		Sound: "Glass", Focus: true, TTY: "/dev/ttys009", BundleID: "com.apple.Terminal", SessionID: ""}
+		Sound: "Glass", Focus: true, TTY: "/dev/ttys009", BundleID: "com.apple.Terminal", SessionID: "s7"}
 	if len(r.events) != 1 || !r.launches[0] {
 		t.Fatalf("events %v launches %v", r.events, r.launches)
 	}
 	got := r.events[0]
-	got.SessionID = ""
 	if got != want {
 		t.Fatalf("got %+v want %+v", got, want)
+	}
+}
+
+func TestStopToastWithoutSessionStaysSessionless(t *testing.T) {
+	r := &rec{}
+	run(t, "stop", []string{"--sound", "none"}, `{"cwd":"/x/p"}`, r.deps(nil))
+	if e := r.events[0]; e.SessionID != "" {
+		t.Fatalf("toast got fallback session id %q", e.SessionID)
 	}
 }
 

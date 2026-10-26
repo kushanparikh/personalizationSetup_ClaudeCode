@@ -11,6 +11,7 @@ mod macos;
 pub mod serve;
 pub mod sidecar;
 mod sound;
+mod status;
 
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use tauri_plugin_log::{Target, TargetKind};
