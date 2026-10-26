@@ -348,6 +348,11 @@ mod tests {
     }
 
     #[test]
+    fn session_end_moved_on_clears_green() {
+        assert_eq!(light_after(vec![toast("s1"), moved_on("s1", "SessionEnd")]), (Light::None, Light::None));
+    }
+
+    #[test]
     fn stop_moved_on_still_closes_panel() {
         let (mut s, mut b) = (Status::default(), Board::default());
         step(&mut s, &mut b, ServeLine::Panel(Alert { session_id: "s1".into(), ..Alert::default() }));
