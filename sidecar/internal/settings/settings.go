@@ -323,34 +323,35 @@ func (f *File) resolve() (string, error) {
 // ErrChangedSinceLoad if it changed since Load, backs it up, checks the new
 // content parses, and replaces the target atomically. It returns the backup
 // path, or "" if there was nothing to back up. If the new content equals the
-// current file, Save does nothing and returns "".
-func (f *File) Save(o SaveOptions) (backupPath string, err error) {
+// current file, Save does nothing and returns "", false. changed reports
+// whether the file was written.
+func (f *File) Save(o SaveOptions) (backupPath string, changed bool, err error) {
 	if o.BackupDir == "" {
-		return "", errors.New("settings: no backup directory")
+		return "", false, errors.New("settings: no backup directory")
 	}
 	if o.Keep <= 0 {
 		o.Keep = 5
 	}
 	target, err := f.resolve()
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	current, exists, err := readTarget(target)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 	if _, err := parse(f.Path, current); err != nil {
-		return "", err
+		return "", false, err
 	}
 	if exists != f.existed || !bytes.Equal(current, f.loaded) {
-		return "", ErrChangedSinceLoad
+		return "", false, ErrChangedSinceLoad
 	}
 	out := jsonx.Marshal(f.root)
 	if exists && bytes.Equal(out, current) {
-		return "", nil
+		return "", false, nil
 	}
 	if _, err := jsonx.Parse(out); err != nil {
-		return "", fmt.Errorf("settings: refusing to write output that doesn't parse: %w", err)
+		return "", false, fmt.Errorf("settings: refusing to write output that doesn't parse: %w", err)
 	}
 
 	mode := fs.FileMode(0o600)
@@ -359,14 +360,17 @@ func (f *File) Save(o SaveOptions) (backupPath string, err error) {
 	}
 	if len(current) > 0 {
 		if backupPath, err = backup(o, current); err != nil {
-			return "", err
+			return "", false, err
 		}
 	}
 	dir := filepath.Dir(target)
 	if err := os.MkdirAll(dir, 0o700); err != nil {
-		return backupPath, err
+		return backupPath, false, err
 	}
-	return backupPath, writeAtomic(target, out, mode)
+	if err := writeAtomic(target, out, mode); err != nil {
+		return backupPath, false, err
+	}
+	return backupPath, true, nil
 }
 
 func backup(o SaveOptions, data []byte) (string, error) {

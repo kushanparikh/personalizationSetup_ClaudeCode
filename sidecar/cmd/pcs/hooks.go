@@ -85,9 +85,13 @@ func saveState(st *state.Store) {
 }
 
 func saveSettings(f *settings.File, o settings.SaveOptions, what string) (string, error) {
-	backup, err := f.Save(o)
+	backup, changed, err := f.Save(o)
 	if err != nil {
 		return "", err
+	}
+	if !changed {
+		slog.Default().Info("settings unchanged", "path", f.Path, "change", what)
+		return backup, nil
 	}
 	slog.Default().Info("settings written", "path", f.Path, "change", what, "backup", backup)
 	return backup, nil
