@@ -13,14 +13,20 @@ use tauri::{
 use crate::board::{Board, Change, Kind, Shown};
 use crate::events::ServeLine;
 use crate::layout::{stack, Rect, WIDTH};
-use crate::{macos, sidecar, sound};
+use crate::status::Status;
+use crate::{macos, sidecar, sound, tray_light};
 
 pub const UPDATED_EVENT: &str = "alert-updated";
 const TOAST_LIFETIME: Duration = Duration::from_secs(6);
 const FOCUS_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// The shown alerts, and the status light's memory of finished sessions.
+/// Lock order when both are held: status, then board.
 #[derive(Default)]
-pub struct Alerts(Mutex<Board>);
+pub struct Alerts {
+    board: Mutex<Board>,
+    status: Mutex<Status>,
+}
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -53,25 +59,62 @@ impl From<&Shown> for AlertView {
 fn board(app: &AppHandle) -> std::sync::MutexGuard<'_, Board> {
     let state = app.state::<Alerts>();
     // A poisoned lock only means an earlier panic mid-update; keep going.
-    state.inner().0.lock().unwrap_or_else(|e| e.into_inner())
+    state.inner().board.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+fn status(app: &AppHandle) -> std::sync::MutexGuard<'_, Status> {
+    let state = app.state::<Alerts>();
+    state.inner().status.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Main thread only: recomputes the status light from the board and the
+/// finished sessions, and draws it.
+fn refresh_light(app: &AppHandle) {
+    let (panels, sessionless) = {
+        let b = board(app);
+        (b.open_panels(), b.sessionless_toasts())
+    };
+    let (light, tooltip) = {
+        let s = status(app);
+        let light = s.light(panels, sessionless);
+        (light, s.tooltip(light, panels))
+    };
+    tray_light::set(app, light, &tooltip);
+}
+
+/// The menu-bar menu opened: every finished session counts as seen.
+/// Main thread only.
+pub fn menu_opened(app: &AppHandle) {
+    status(app).menu_opened();
+    refresh_light(app);
 }
 
 /// Entry point for `pcs serve` lines.
 pub fn handle(app: &AppHandle, line: ServeLine) {
     let a = app.clone();
-    let run = move |f: Box<dyn FnOnce(&mut Board) -> Vec<Change> + Send>| {
+    type Step = Box<dyn FnOnce(&mut Status, &mut Board) -> Vec<Change> + Send>;
+    let run = move |f: Step| {
         let app = a.clone();
         if let Err(e) = a.run_on_main_thread(move || {
-            let changes = f(&mut board(&app));
+            let changes = f(&mut status(&app), &mut board(&app));
             apply(&app, changes);
         }) {
             log::error!("alerts: run_on_main_thread: {e}");
         }
     };
     match line {
-        ServeLine::Panel(alert) => run(Box::new(move |b| b.panel(alert))),
-        ServeLine::Toast(alert) => run(Box::new(move |b| b.toast(alert))),
-        ServeLine::MovedOn(sid) => run(Box::new(move |b| b.moved_on(&sid))),
+        ServeLine::Panel(alert) => run(Box::new(move |s, b| {
+            s.panel_opened(&alert.session_id);
+            b.panel(alert)
+        })),
+        ServeLine::Toast(alert) => run(Box::new(move |s, b| {
+            s.toast(&alert.session_id);
+            b.toast(alert)
+        })),
+        ServeLine::MovedOn(sid) => run(Box::new(move |s, b| {
+            s.moved_on(&sid);
+            b.moved_on(&sid)
+        })),
         ServeLine::Ready | ServeLine::Error(_) => {}
     }
 }
@@ -102,6 +145,7 @@ fn apply(app: &AppHandle, changes: Vec<Change>) {
         }
     }
     relayout(app);
+    refresh_light(app);
 }
 
 /// Main thread only. Labels are never reused, so a build only fails for
@@ -154,12 +198,14 @@ fn destroy(app: &AppHandle, label: &str) {
     }
 }
 
-/// Destroys `label`'s window and restacks the rest, on the main thread.
+/// Destroys `label`'s window, restacks the rest and redraws the status
+/// light, on the main thread.
 fn close_and_relayout(app: &AppHandle, label: String) {
     let a = app.clone();
     if let Err(e) = app.run_on_main_thread(move || {
         destroy(&a, &label);
         relayout(&a);
+        refresh_light(&a);
     }) {
         log::error!("alerts: run_on_main_thread: {e}");
     }
@@ -211,13 +257,16 @@ fn place(w: &WebviewWindow, pos: Option<(f64, f64)>) {
 
 #[tauri::command]
 pub fn alert_get(state: State<'_, Alerts>, label: String) -> Option<AlertView> {
-    let b = state.0.lock().unwrap_or_else(|e| e.into_inner());
+    let b = state.board.lock().unwrap_or_else(|e| e.into_inner());
     b.get(&label).map(AlertView::from)
 }
 
 #[tauri::command]
 pub async fn alert_click(app: AppHandle, label: String) {
     let Some(shown) = board(&app).remove(&label) else { return };
+    if shown.kind == Kind::Toast {
+        status(&app).toast_clicked(&shown.alert.session_id);
+    }
     // Close first so a slow focus never leaves a dead panel up.
     close_and_relayout(&app, label.clone());
     if !shown.alert.focus {

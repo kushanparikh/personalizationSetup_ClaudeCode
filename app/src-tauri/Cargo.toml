@@ -25,7 +25,25 @@ tokio = { version = "1", features = ["sync", "time"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 # Same versions tauri already pulls in, so there is one copy of each.
 objc2 = "=0.6.5"
-objc2-app-kit = { version = "=0.3.2", default-features = false, features = ["std", "NSResponder", "NSWindow"] }
+objc2-app-kit = { version = "=0.3.2", default-features = false, features = [
+    "std",
+    "objc2-core-foundation",
+    "objc2-core-graphics",
+    "objc2-quartz-core",
+    "NSButton",
+    "NSColor",
+    "NSControl",
+    "NSImage",
+    "NSResponder",
+    "NSStatusBarButton",
+    "NSStatusItem",
+    "NSView",
+    "NSWindow",
+] }
+objc2-core-foundation = { version = "=0.3.2", default-features = false, features = ["std", "CFCGTypes"] }
+objc2-core-graphics = { version = "=0.3.2", default-features = false, features = ["std", "CGColor"] }
+objc2-quartz-core = { version = "=0.3.2", default-features = false, features = ["std", "objc2-core-foundation", "objc2-core-graphics", "CALayer"] }
+objc2-foundation = { version = "=0.3.2", default-features = false, features = ["std", "NSGeometry"] }
 
 [profile.release]
 codegen-units = 1

@@ -12,6 +12,7 @@ pub mod serve;
 pub mod sidecar;
 mod sound;
 mod status;
+mod tray_light;
 
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use tauri_plugin_log::{Target, TargetKind};
@@ -62,6 +63,7 @@ const TRAY_QUIT: &str = "quit";
 /// stored in managed state), or the item disappears.
 fn build_tray(app: &tauri::App) -> tauri::Result<tauri::tray::TrayIcon> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
     let open = MenuItem::with_id(app, TRAY_OPEN, "Open Personalization Setup", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, TRAY_QUIT, "Quit Personalization Setup", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &PredefinedMenuItem::separator(app)?, &quit])?;
@@ -75,6 +77,19 @@ fn build_tray(app: &tauri::App) -> tauri::Result<tauri::tray::TrayIcon> {
             TRAY_OPEN => show_main(app),
             TRAY_QUIT => app.exit(0),
             _ => {}
+        })
+        // tray-icon (macOS) sends a left or right button Down just before it
+        // pops the menu up (both open it here), so that Down is "menu opened".
+        // It reaches us through the event loop, on the main thread.
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left | MouseButton::Right,
+                button_state: MouseButtonState::Down,
+                ..
+            } = event
+            {
+                alerts::menu_opened(tray.app_handle());
+            }
         });
     builder.build(app)
 }

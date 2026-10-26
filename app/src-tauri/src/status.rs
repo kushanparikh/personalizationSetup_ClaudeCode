@@ -1,6 +1,5 @@
 //! Pure status-light model: which sessions have finished and not been revisited.
-//! No Tauri types; Task 3 wires it into alerts and draws the light.
-#![allow(dead_code)] // wired up in the next task
+//! No Tauri types; `alerts` feeds it and `tray_light` draws the result.
 
 use std::collections::BTreeSet;
 
@@ -17,10 +16,6 @@ pub struct Status {
 }
 
 impl Status {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// A finished toast arrived. Sessionless toasts are tracked by the caller
     /// (only while visible), so they are not recorded here.
     pub fn toast(&mut self, session_id: &str) {
@@ -75,14 +70,14 @@ mod tests {
 
     #[test]
     fn status_none_at_start() {
-        let s = Status::new();
+        let s = Status::default();
         assert_eq!(s.light(0, 0), Light::None);
         assert_eq!(s.tooltip(Light::None, 0), "Personalization Setup");
     }
 
     #[test]
     fn status_toast_then_moved_on_is_none() {
-        let mut s = Status::new();
+        let mut s = Status::default();
         s.toast("s1");
         s.moved_on("s1");
         assert_eq!(s.light(0, 0), Light::None);
@@ -90,14 +85,14 @@ mod tests {
 
     #[test]
     fn status_finished_stays_after_toast_fades() {
-        let mut s = Status::new();
+        let mut s = Status::default();
         s.toast("s1");
         assert_eq!(s.light(0, 0), Light::Done);
     }
 
     #[test]
     fn status_panel_takes_precedence_then_falls_back() {
-        let mut s = Status::new();
+        let mut s = Status::default();
         s.toast("s1");
         s.panel_opened("s2");
         assert_eq!(s.light(1, 0), Light::Wait);
@@ -106,7 +101,7 @@ mod tests {
 
     #[test]
     fn status_panel_for_finished_session_clears_it() {
-        let mut s = Status::new();
+        let mut s = Status::default();
         s.toast("s1");
         s.panel_opened("s1");
         assert_eq!(s.light(0, 0), Light::None);
@@ -117,7 +112,7 @@ mod tests {
 
     #[test]
     fn status_menu_opened_clears_all() {
-        let mut s = Status::new();
+        let mut s = Status::default();
         s.toast("s1");
         s.toast("s2");
         s.menu_opened();
@@ -126,7 +121,7 @@ mod tests {
 
     #[test]
     fn status_sessionless_toast_only_while_visible() {
-        let mut s = Status::new();
+        let mut s = Status::default();
         s.toast("");
         assert_eq!(s.light(0, 1), Light::Done);
         assert_eq!(s.light(0, 0), Light::None);
@@ -135,7 +130,7 @@ mod tests {
 
     #[test]
     fn status_tooltip_copy() {
-        let mut s = Status::new();
+        let mut s = Status::default();
         s.toast("a");
         assert_eq!(s.tooltip(Light::Done, 0), "Personalization Setup: 1 session finished");
         s.toast("b");
