@@ -11,6 +11,8 @@ mod macos;
 pub mod serve;
 pub mod sidecar;
 mod sound;
+mod status;
+mod tray_light;
 
 use tauri::{AppHandle, Manager, RunEvent, WindowEvent};
 use tauri_plugin_log::{Target, TargetKind};
@@ -61,21 +63,34 @@ const TRAY_QUIT: &str = "quit";
 /// stored in managed state), or the item disappears.
 fn build_tray(app: &tauri::App) -> tauri::Result<tauri::tray::TrayIcon> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
     let open = MenuItem::with_id(app, TRAY_OPEN, "Open Personalization Setup", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, TRAY_QUIT, "Quit Personalization Setup", true, None::<&str>)?;
     let menu = Menu::with_items(app, &[&open, &PredefinedMenuItem::separator(app)?, &quit])?;
-    let mut builder = tauri::tray::TrayIconBuilder::new()
+    let builder = tauri::tray::TrayIconBuilder::new()
         .tooltip("Personalization Setup")
         .menu(&menu)
         .show_menu_on_left_click(true)
+        .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray-template.png"))?)
+        .icon_as_template(true)
         .on_menu_event(|app, event| match event.id().as_ref() {
             TRAY_OPEN => show_main(app),
             TRAY_QUIT => app.exit(0),
             _ => {}
+        })
+        // tray-icon (macOS) sends a left or right button Down just before it
+        // pops the menu up (both open it here), so that Down is "menu opened".
+        // It reaches us through the event loop, on the main thread.
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left | MouseButton::Right,
+                button_state: MouseButtonState::Down,
+                ..
+            } = event
+            {
+                alerts::menu_opened(tray.app_handle());
+            }
         });
-    if let Some(icon) = app.default_window_icon() {
-        builder = builder.icon(icon.clone());
-    }
     builder.build(app)
 }
 

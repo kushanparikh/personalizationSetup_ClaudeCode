@@ -35,6 +35,7 @@ const (
 
 	maxLine        = 64 * 1024
 	maxMessageRune = 1000
+	maxCauseRune   = 40
 	readDeadline   = 2 * time.Second
 	writeDeadline  = 500 * time.Millisecond
 	redialEvery    = 100 * time.Millisecond
@@ -55,6 +56,9 @@ type Event struct {
 	BundleID  string `json:"bundleId,omitempty"`
 	Tone      string `json:"tone,omitempty"`
 	Focus     bool   `json:"focus"`
+	// Cause is the Claude Code hook event behind a moved_on (for example
+	// "Stop" or "UserPromptSubmit"); "" when unknown.
+	Cause string `json:"cause,omitempty"`
 }
 
 // Validate checks an event received from a client.
@@ -75,6 +79,12 @@ func (e Event) Validate() error {
 	case "", ToneWait, ToneDone, ToneDanger:
 	default:
 		return fmt.Errorf("invalid tone %q", e.Tone)
+	}
+	if e.Cause != "" && e.Kind != KindMovedOn {
+		return fmt.Errorf("kind %q can't have a cause", e.Kind)
+	}
+	if utf8.RuneCountInString(e.Cause) > maxCauseRune {
+		return errors.New("cause too long")
 	}
 	if utf8.RuneCountInString(e.Message) > maxMessageRune {
 		return errors.New("message too long")

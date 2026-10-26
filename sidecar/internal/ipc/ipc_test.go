@@ -132,6 +132,9 @@ func TestValidate(t *testing.T) {
 		{V: 1, Kind: KindMovedOn},
 		{V: 1, Kind: KindToast, Message: strings.Repeat("a", 1001)},
 		{V: 1, Kind: KindToast, Tone: "purple"},
+		{V: 1, Kind: KindToast, Cause: "Stop"},
+		{V: 1, Kind: KindPanel, SessionID: "s", Cause: "Stop"},
+		{V: 1, Kind: KindMovedOn, SessionID: "s", Cause: strings.Repeat("a", 41)},
 	}
 	for _, e := range bad {
 		if e.Validate() == nil {
@@ -142,6 +145,8 @@ func TestValidate(t *testing.T) {
 		{V: 1, Kind: KindToast},
 		{V: 1, Kind: KindPanel, SessionID: "s"},
 		{V: 1, Kind: KindMovedOn, SessionID: "s"},
+		{V: 1, Kind: KindMovedOn, SessionID: "s", Cause: "Stop"},
+		{V: 1, Kind: KindMovedOn, SessionID: "s", Cause: strings.Repeat("é", 40)},
 		{V: 1, Kind: KindToast, Message: strings.Repeat("é", 1000)},
 		{V: 1, Kind: KindToast, Tone: ToneWait},
 		{V: 1, Kind: KindToast, Tone: ToneDone},

@@ -1,5 +1,5 @@
 {"v":1,"kind":"ready","focus":false}
 {"v":1,"kind":"toast","title":"Claude Code — demo","message":"Finished working","sound":"Glass","tone":"done","focus":false}
 {"v":1,"kind":"panel","sessionId":"s1","title":"Claude Code — demo","message":"Needs input","sound":"Ping","tty":"/dev/ttys003","bundleId":"com.apple.Terminal","tone":"wait","focus":true}
-{"v":1,"kind":"moved_on","sessionId":"s1","focus":false}
+{"v":1,"kind":"moved_on","sessionId":"s1","focus":false,"cause":"Stop"}
 {"error":"already running"}

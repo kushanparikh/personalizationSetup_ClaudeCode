@@ -90,9 +90,9 @@ func (p PendingItem) MarshalJSON() ([]byte, error) {
 }
 
 // CurrentAnswers returns the answers for t and whether it has owned entries.
-// Answers come from the owned entries if there are any (for input-needed, the
-// notification entry, since moved-on entries carry none), else from the
-// stored answers, else the type's defaults.
+// Answers come from the owned entry that carries them if there is one (not
+// moved-on or revisit entries, which carry none), else from the stored
+// answers, else the type's defaults.
 func CurrentAnswers(f *settings.File, st *state.Store, t hooktypes.Type) (a hooktypes.Answers, enabled bool) {
 	fromEntry := false
 	if f != nil {
@@ -101,7 +101,7 @@ func CurrentAnswers(f *settings.File, st *state.Store, t hooktypes.Type) (a hook
 				continue
 			}
 			enabled = true
-			if t != hooktypes.InputNeeded || e.Parsed.Sub == "notification" {
+			if e.Parsed.CarriesAnswers() {
 				a, fromEntry = e.Parsed.Answers, true
 				break
 			}

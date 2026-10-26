@@ -89,6 +89,18 @@ impl Board {
     pub fn get(&self, label: &str) -> Option<&Shown> {
         self.items.iter().find(|s| s.label == label)
     }
+    /// Panels on the board (the amber count).
+    pub fn open_panels(&self) -> usize {
+        self.items.iter().filter(|s| s.kind == Kind::Panel).count()
+    }
+    /// Toasts on the board with no session id ("Send test"): they light
+    /// green only while shown.
+    pub fn sessionless_toasts(&self) -> usize {
+        self.items
+            .iter()
+            .filter(|s| s.kind == Kind::Toast && s.alert.session_id.is_empty())
+            .count()
+    }
     pub fn heights(&self) -> Vec<(String, f64)> {
         self.items
             .iter()
@@ -105,6 +117,21 @@ mod tests {
 
     fn alert(sid: &str, msg: &str) -> Alert {
         Alert { session_id: sid.into(), message: msg.into(), ..Alert::default() }
+    }
+
+    #[test]
+    fn light_counts_from_board() {
+        let mut b = Board::default();
+        assert_eq!((b.open_panels(), b.sessionless_toasts()), (0, 0));
+        b.panel(alert("a", "x"));
+        b.panel(alert("a", "again"));
+        b.panel(alert("b", "y"));
+        b.toast(alert("c", "done"));
+        b.toast(alert("", "test"));
+        assert_eq!((b.open_panels(), b.sessionless_toasts()), (2, 1));
+        b.moved_on("a");
+        b.remove("toast-2");
+        assert_eq!((b.open_panels(), b.sessionless_toasts()), (1, 0));
     }
 
     #[test]

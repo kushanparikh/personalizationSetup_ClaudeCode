@@ -91,7 +91,7 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 		}
 	case "stop":
 		e := ipc.Event{V: 1, Kind: ipc.KindToast, Title: title(in, getenv), Message: "Finished working", Tone: ipc.ToneDone,
-			Sound: sound(a.Sound), Focus: a.ClickToFocus}
+			Sound: sound(a.Sound), Focus: a.ClickToFocus, SessionID: in.SessionID}
 		if a.ClickToFocus {
 			e.TTY = d.TTY()
 			e.BundleID = proc.TerminalBundleID(getenv)
@@ -118,12 +118,12 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 			e.SessionID = "unknown"
 		}
 		send(d, log, e, true)
-	case "moved-on":
+	case "moved-on", "revisit":
 		id := in.SessionID
 		if id == "" {
 			id = "unknown"
 		}
-		send(d, log, ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: id}, false)
+		send(d, log, ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: id, Cause: cause(in.Event)}, false)
 	default:
 		log.Warn("unknown hook subcommand", "sub", sub)
 	}
@@ -177,6 +177,15 @@ func send(d Deps, log *slog.Logger, e ipc.Event, launch bool) {
 	if err := d.Send(e, launch); err != nil {
 		log.Warn("send failed", "kind", e.Kind, "err", err)
 	}
+}
+
+// cause trims the hook event name to what ipc.Event.Validate accepts, so an
+// odd name can never get the event dropped.
+func cause(ev string) string {
+	if r := []rune(ev); len(r) > 40 {
+		return string(r[:40])
+	}
+	return ev
 }
 
 func sound(s string) string {

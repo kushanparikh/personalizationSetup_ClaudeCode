@@ -68,17 +68,24 @@ func TestSessionStartGitFailsPrintsNothing(t *testing.T) {
 
 func TestStopToast(t *testing.T) {
 	r := &rec{}
-	run(t, "stop", []string{"--sound", "Glass", "--focus"}, `{"cwd":"/x/My Project"}`,
+	run(t, "stop", []string{"--sound", "Glass", "--focus"}, `{"session_id":"s7","cwd":"/x/My Project"}`,
 		r.deps(map[string]string{"__CFBundleIdentifier": "com.apple.Terminal", "TERM_PROGRAM": "Apple_Terminal"}))
 	want := ipc.Event{V: 1, Kind: ipc.KindToast, Title: "Claude Code — My Project", Message: "Finished working", Tone: ipc.ToneDone,
-		Sound: "Glass", Focus: true, TTY: "/dev/ttys009", BundleID: "com.apple.Terminal", SessionID: ""}
+		Sound: "Glass", Focus: true, TTY: "/dev/ttys009", BundleID: "com.apple.Terminal", SessionID: "s7"}
 	if len(r.events) != 1 || !r.launches[0] {
 		t.Fatalf("events %v launches %v", r.events, r.launches)
 	}
 	got := r.events[0]
-	got.SessionID = ""
 	if got != want {
 		t.Fatalf("got %+v want %+v", got, want)
+	}
+}
+
+func TestStopToastWithoutSessionStaysSessionless(t *testing.T) {
+	r := &rec{}
+	run(t, "stop", []string{"--sound", "none"}, `{"cwd":"/x/p"}`, r.deps(nil))
+	if e := r.events[0]; e.SessionID != "" {
+		t.Fatalf("toast got fallback session id %q", e.SessionID)
 	}
 }
 
@@ -128,13 +135,45 @@ func TestHookBadInput(t *testing.T) {
 
 func TestMovedOnNeverLaunches(t *testing.T) {
 	r := &rec{sendErr: errors.New("down")}
-	run(t, "moved-on", nil, `{"session_id":"s1"}`, r.deps(nil))
+	run(t, "moved-on", nil, `{"session_id":"s1","hook_event_name":"UserPromptSubmit"}`, r.deps(nil))
 	if r.launches[0] || r.ttyCalls != 0 || r.gitCalls != 0 {
 		t.Fatalf("launch=%v tty=%d", r.launches, r.ttyCalls)
 	}
 	e := r.events[0]
-	if e.Kind != ipc.KindMovedOn || e.SessionID != "s1" || e.Tone != "" || e.V != 1 {
+	if e.Kind != ipc.KindMovedOn || e.SessionID != "s1" || e.Cause != "UserPromptSubmit" || e.Tone != "" || e.V != 1 {
 		t.Fatalf("%+v", e)
+	}
+}
+
+func TestMovedOnCarriesStopCause(t *testing.T) {
+	r := &rec{}
+	run(t, "moved-on", nil, `{"session_id":"s1","hook_event_name":"Stop"}`, r.deps(nil))
+	if e := r.events[0]; e.Kind != ipc.KindMovedOn || e.Cause != "Stop" {
+		t.Fatalf("%+v", e)
+	}
+	r = &rec{}
+	run(t, "moved-on", nil, `{}`, r.deps(nil))
+	if e := r.events[0]; e.SessionID != "unknown" || e.Cause != "" {
+		t.Fatalf("%+v", e)
+	}
+	r = &rec{}
+	run(t, "moved-on", nil, `{"session_id":"s1","hook_event_name":"`+strings.Repeat("é", 50)+`"}`, r.deps(nil))
+	if e := r.events[0]; e.Cause != strings.Repeat("é", 40) || e.Validate() != nil {
+		t.Fatalf("%+v", e)
+	}
+}
+
+func TestRevisitIsMovedOn(t *testing.T) {
+	for _, ev := range []string{"UserPromptSubmit", "SessionEnd"} {
+		r := &rec{sendErr: errors.New("down")}
+		run(t, "revisit", nil, `{"session_id":"s1","hook_event_name":"`+ev+`"}`, r.deps(nil))
+		if len(r.events) != 1 || r.launches[0] || r.ttyCalls != 0 || r.gitCalls != 0 {
+			t.Fatalf("%s: events=%v launch=%v tty=%d", ev, r.events, r.launches, r.ttyCalls)
+		}
+		want := ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: "s1", Cause: ev}
+		if r.events[0] != want {
+			t.Fatalf("%s: got %+v want %+v", ev, r.events[0], want)
+		}
 	}
 }
 
@@ -158,7 +197,7 @@ func (h panicHandler) WithAttrs([]slog.Attr) slog.Handler      { panic("log") }
 func (h panicHandler) WithGroup(string) slog.Handler           { panic("log") }
 
 func TestPanickingLoggerStillZero(t *testing.T) {
-	for _, sub := range []string{"stop", "notification", "moved-on", "bogus"} {
+	for _, sub := range []string{"stop", "notification", "moved-on", "revisit", "bogus"} {
 		r := &rec{panicOn: true}
 		d := r.deps(nil)
 		d.Log = slog.New(panicHandler{})
@@ -167,7 +206,7 @@ func TestPanickingLoggerStillZero(t *testing.T) {
 }
 
 func TestNoStdoutExceptSessionStart(t *testing.T) {
-	for _, sub := range []string{"stop", "notification", "moved-on", "bogus"} {
+	for _, sub := range []string{"stop", "notification", "moved-on", "revisit", "bogus"} {
 		r := &rec{}
 		if got := run(t, sub, nil, `{}`, r.deps(nil)); got != "" {
 			t.Fatalf("%s wrote %q", sub, got)

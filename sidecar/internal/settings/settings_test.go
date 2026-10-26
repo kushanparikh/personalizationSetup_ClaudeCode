@@ -86,6 +86,13 @@ func entries(t *testing.T, typ hooktypes.Type, a hooktypes.Answers) []hooktypes.
 	return es
 }
 
+// stopOnly is Finished's Stop entry alone: a single-entry fixture for tests
+// about how one entry is placed in the file.
+func stopOnly(t *testing.T, a hooktypes.Answers) []hooktypes.Entry {
+	t.Helper()
+	return entries(t, hooktypes.Finished, a)[:1]
+}
+
 // setup writes content to dir/settings.json and returns the path and save
 // options using dir/backups.
 func setup(t *testing.T, content string) (string, SaveOptions) {
@@ -128,7 +135,7 @@ func read(t *testing.T, p string) string {
 func TestSetOwnedKeepsEverythingElse(t *testing.T) {
 	p, o := setup(t, userSettings)
 	f := load(t, p)
-	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+	f.SetOwned(hooktypes.Finished, stopOnly(t, finishedDefault))
 	backup := save(t, f, o)
 
 	want := strings.Replace(userSettings, `            "command": "~/.claude/hooks/notify-done.sh",
@@ -194,13 +201,13 @@ func TestSetOwnedReplacesNotDuplicates(t *testing.T) {
 
 	f = load(t, p)
 	got := ownedStopGroups(t, f)
-	if len(got) != 1 {
-		t.Fatalf("owned Finished entries = %d, want 1: %+v", len(got), got)
+	if len(got) != 3 {
+		t.Fatalf("owned Finished entries = %d, want 3: %+v", len(got), got)
 	}
 	if want := "~/.pcs/bin/pcs-hook hook stop --sound Hero --no-focus"; got[0].Command != want || got[0].Event != "Stop" {
 		t.Fatalf("got %+v, want Stop %q", got[0], want)
 	}
-	if strings.Count(read(t, p), "pcs-hook") != 1 {
+	if strings.Count(read(t, p), "pcs-hook hook stop") != 1 || strings.Count(read(t, p), "pcs-hook hook revisit") != 2 {
 		t.Fatalf("file has duplicate owned commands:\n%s", read(t, p))
 	}
 }
@@ -227,7 +234,7 @@ func TestSetOwnedKeepsPosition(t *testing.T) {
 `
 	p, o := setup(t, in)
 	f := load(t, p)
-	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+	f.SetOwned(hooktypes.Finished, stopOnly(t, finishedDefault))
 	save(t, f, o)
 	if got := read(t, p); got != in {
 		t.Fatalf("got:\n%s\nwant:\n%s", got, in)
@@ -325,8 +332,8 @@ func TestRemoveAllOwned(t *testing.T) {
 	f.SetOwned(hooktypes.GitStatus, entries(t, hooktypes.GitStatus, hooktypes.Answers{UntrackedDirty: true}))
 	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
 	f.SetOwned(hooktypes.InputNeeded, entries(t, hooktypes.InputNeeded, hooktypes.Answers{Sound: "Ping"}))
-	if n := f.RemoveAllOwned(); n != 6 {
-		t.Fatalf("RemoveAllOwned = %d, want 6", n)
+	if n := f.RemoveAllOwned(); n != 8 {
+		t.Fatalf("RemoveAllOwned = %d, want 8", n)
 	}
 	save(t, f, o)
 	if got := read(t, p); got != userSettings {
@@ -423,7 +430,7 @@ func TestMalformedHooksUntouched(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			p, o := setup(t, in)
 			f := load(t, p)
-			f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+			f.SetOwned(hooktypes.Finished, stopOnly(t, finishedDefault))
 			save(t, f, o)
 			if got := read(t, p); got != in {
 				t.Fatalf("got:\n%s\nwant:\n%s", got, in)
@@ -439,7 +446,7 @@ func TestMalformedHooksUntouched(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			p, o := setup(t, in)
 			f := load(t, p)
-			f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+			f.SetOwned(hooktypes.Finished, stopOnly(t, finishedDefault))
 			if n := f.RemoveAllOwned(); n != 1 {
 				t.Fatalf("RemoveAllOwned = %d, want 1", n)
 			}
@@ -538,7 +545,7 @@ func TestMissingFileCreated(t *testing.T) {
 		t.Fatalf("~/.claude exists: %v", err)
 	}
 	f := load(t, p)
-	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+	f.SetOwned(hooktypes.Finished, stopOnly(t, finishedDefault))
 	if b := save(t, f, SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}); b != "" {
 		t.Fatalf("backup %q for a missing file", b)
 	}
@@ -772,5 +779,67 @@ func TestRemoveAllOwnedByPrefix(t *testing.T) {
 	got := read(t, p)
 	if strings.Contains(got, "future-thing") || !strings.Contains(got, "notify-done.sh") {
 		t.Fatalf("got:\n%s", got)
+	}
+}
+
+// ownedOf returns the owned entries of t as event/matcher/command strings,
+// sorted.
+func ownedOf(f *File, t hooktypes.Type) []string {
+	var out []string
+	for _, e := range f.Hooks() {
+		if e.Owned && e.Parsed.Type == t {
+			out = append(out, e.Event+"|"+e.Matcher+"|"+e.Command)
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+func want(es []hooktypes.Entry) []string {
+	var out []string
+	for _, e := range es {
+		out = append(out, e.Event+"|"+e.Matcher+"|"+e.Command)
+	}
+	slices.Sort(out)
+	return out
+}
+
+// Finished and Input-needed both hook UserPromptSubmit (and Stop) with
+// different commands; setting or removing one never touches the other.
+func TestSharedEventsStaySeparate(t *testing.T) {
+	inputA := hooktypes.Answers{Sound: "Ping", ClickToFocus: true}
+	fin, in := entries(t, hooktypes.Finished, finishedDefault), entries(t, hooktypes.InputNeeded, inputA)
+	p, o := setup(t, userSettings)
+	f := load(t, p)
+	f.SetOwned(hooktypes.Finished, fin)
+	f.SetOwned(hooktypes.InputNeeded, in)
+	f.SetOwned(hooktypes.Finished, fin) // replace, not duplicate
+	f.SetOwned(hooktypes.InputNeeded, in)
+	if got := ownedOf(f, hooktypes.Finished); !slices.Equal(got, want(fin)) {
+		t.Fatalf("finished entries = %v", got)
+	}
+	if got := ownedOf(f, hooktypes.InputNeeded); !slices.Equal(got, want(in)) {
+		t.Fatalf("input-needed entries = %v", got)
+	}
+
+	if n := f.RemoveOwned(hooktypes.Finished); n != len(fin) {
+		t.Fatalf("RemoveOwned(Finished) = %d", n)
+	}
+	if got := ownedOf(f, hooktypes.InputNeeded); !slices.Equal(got, want(in)) {
+		t.Fatalf("removing finished touched input-needed: %v", got)
+	}
+
+	f.SetOwned(hooktypes.Finished, fin)
+	if n := f.RemoveOwned(hooktypes.InputNeeded); n != len(in) {
+		t.Fatalf("RemoveOwned(InputNeeded) = %d", n)
+	}
+	if got := ownedOf(f, hooktypes.Finished); !slices.Equal(got, want(fin)) {
+		t.Fatalf("removing input-needed touched finished: %v", got)
+	}
+
+	f.RemoveOwned(hooktypes.Finished)
+	save(t, f, o)
+	if got := read(t, p); got != userSettings {
+		t.Fatalf("not back to the original:\n%s", got)
 	}
 }
