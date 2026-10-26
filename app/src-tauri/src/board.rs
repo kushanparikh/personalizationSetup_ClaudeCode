@@ -25,40 +25,33 @@ pub enum Change {
     Close(String),
 }
 
-/// Window label for a session's panel: `[A-Za-z0-9-]` only, max 64 chars.
-pub fn panel_label(session_id: &str) -> String {
-    let clean: String = session_id
-        .chars()
-        .filter(|c| c.is_ascii_alphanumeric() || *c == '-')
-        .take(64)
-        .collect();
-    if clean.is_empty() {
-        "panel-unknown".to_string()
-    } else {
-        format!("panel-{clean}")
-    }
-}
-
 #[derive(Default)]
 pub struct Board {
     items: Vec<Shown>,
     next_toast: u64,
+    next_panel: u64,
 }
 
 impl Board {
+    /// Update the session's open panel in place, or open a new one under a
+    /// fresh label (a destroyed label stays registered for a moment).
     pub fn panel(&mut self, a: Alert) -> Vec<Change> {
-        let label = panel_label(&a.session_id);
-        let shown = Shown { label: label.clone(), kind: Kind::Panel, alert: a };
-        match self.items.iter_mut().find(|s| s.label == label) {
-            Some(slot) => {
-                *slot = shown.clone();
-                vec![Change::Update(shown)]
-            }
-            None => {
-                self.items.push(shown.clone());
-                vec![Change::Open(shown)]
-            }
+        if let Some(slot) = self
+            .items
+            .iter_mut()
+            .find(|s| s.kind == Kind::Panel && s.alert.session_id == a.session_id)
+        {
+            slot.alert = a;
+            return vec![Change::Update(slot.clone())];
         }
+        self.next_panel += 1;
+        let shown = Shown {
+            label: format!("panel-{}", self.next_panel),
+            kind: Kind::Panel,
+            alert: a,
+        };
+        self.items.push(shown.clone());
+        vec![Change::Open(shown)]
     }
     pub fn toast(&mut self, a: Alert) -> Vec<Change> {
         self.next_toast += 1;
@@ -71,14 +64,14 @@ impl Board {
         vec![Change::Open(shown)]
     }
     pub fn moved_on(&mut self, session_id: &str) -> Vec<Change> {
-        let label = panel_label(session_id);
-        match self.get(&label) {
-            Some(s) if s.kind == Kind::Panel => {
-                self.remove(&label);
-                vec![Change::Close(label)]
-            }
-            _ => Vec::new(),
-        }
+        let Some(i) = self
+            .items
+            .iter()
+            .position(|s| s.kind == Kind::Panel && s.alert.session_id == session_id)
+        else {
+            return Vec::new();
+        };
+        vec![Change::Close(self.items.remove(i).label)]
     }
     pub fn remove(&mut self, label: &str) -> Option<Shown> {
         let i = self.items.iter().position(|s| s.label == label)?;
@@ -116,7 +109,7 @@ mod tests {
         assert_eq!(c.len(), 1);
         match &c[0] {
             Change::Open(s) => {
-                assert_eq!(s.label, "panel-a");
+                assert_eq!(s.label, "panel-1");
                 assert_eq!(s.kind, Kind::Panel);
             }
             other => panic!("expected Open, got {other:?}"),
@@ -130,7 +123,7 @@ mod tests {
         let c = b.panel(alert("a", "two"));
         assert!(matches!(c.as_slice(), [Change::Update(s)] if s.alert.message == "two"));
         assert_eq!(b.heights().len(), 1);
-        assert_eq!(b.get("panel-a").unwrap().alert.message, "two");
+        assert_eq!(b.get("panel-1").unwrap().alert.message, "two");
     }
 
     #[test]
@@ -139,7 +132,7 @@ mod tests {
         b.panel(alert("a", "x"));
         b.panel(alert("b", "y"));
         let labels: Vec<_> = b.heights().into_iter().map(|(l, _)| l).collect();
-        assert_eq!(labels, vec!["panel-a", "panel-b"]);
+        assert_eq!(labels, vec!["panel-1", "panel-2"]);
     }
 
     #[test]
@@ -147,9 +140,9 @@ mod tests {
         let mut b = Board::default();
         b.panel(alert("a", "x"));
         b.panel(alert("b", "y"));
-        assert_eq!(b.moved_on("a"), vec![Change::Close("panel-a".into())]);
-        assert!(b.get("panel-a").is_none());
-        assert!(b.get("panel-b").is_some());
+        assert_eq!(b.moved_on("a"), vec![Change::Close("panel-1".into())]);
+        assert!(b.get("panel-1").is_none());
+        assert!(b.get("panel-2").is_some());
     }
 
     #[test]
@@ -182,20 +175,57 @@ mod tests {
     }
 
     #[test]
-    fn panel_label_sanitises() {
-        assert_eq!(panel_label("../x y"), "panel-xy");
-        assert_eq!(panel_label(""), "panel-unknown");
-        assert_eq!(panel_label(&"a".repeat(100)).len(), "panel-".len() + 64);
-    }
-
-    #[test]
     fn board_relayout_after_remove() {
         let mut b = Board::default();
         b.panel(alert("a", "x"));
         b.panel(alert("b", "y"));
-        assert!(b.remove("panel-a").is_some());
-        assert!(b.heights().iter().all(|(l, _)| l != "panel-a"));
-        assert_eq!(b.heights(), vec![("panel-b".to_string(), PANEL_H)]);
-        assert!(b.remove("panel-a").is_none());
+        assert!(b.remove("panel-1").is_some());
+        assert!(b.heights().iter().all(|(l, _)| l != "panel-1"));
+        assert_eq!(b.heights(), vec![("panel-2".to_string(), PANEL_H)]);
+        assert!(b.remove("panel-1").is_none());
+    }
+
+    fn open_label(c: &[Change]) -> String {
+        match c {
+            [Change::Open(s)] => s.label.clone(),
+            other => panic!("expected Open, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn panel_reopen_after_moved_on_gets_new_label() {
+        let mut b = Board::default();
+        let first = open_label(&b.panel(alert("a", "x")));
+        assert_eq!(b.moved_on("a"), vec![Change::Close(first.clone())]);
+        let second = open_label(&b.panel(alert("a", "y")));
+        assert_ne!(first, second);
+        assert!(second.starts_with("panel-"));
+        assert!(b.get(&first).is_none());
+        assert_eq!(b.get(&second).unwrap().alert.message, "y");
+    }
+
+    #[test]
+    fn update_keeps_position_among_several() {
+        let mut b = Board::default();
+        b.panel(alert("a", "1"));
+        b.panel(alert("b", "2"));
+        b.panel(alert("c", "3"));
+        let c = b.panel(alert("b", "2b"));
+        assert!(matches!(c.as_slice(), [Change::Update(s)] if s.label == "panel-2"));
+        let labels: Vec<_> = b.heights().into_iter().map(|(l, _)| l).collect();
+        assert_eq!(labels, vec!["panel-1", "panel-2", "panel-3"]);
+        assert_eq!(b.get("panel-2").unwrap().alert.message, "2b");
+    }
+
+    #[test]
+    fn long_session_ids_differing_after_64_chars_stay_separate() {
+        let mut b = Board::default();
+        let base = "a".repeat(64);
+        b.panel(alert(&format!("{base}1"), "x"));
+        let c = b.panel(alert(&format!("{base}2"), "y"));
+        assert!(matches!(c.as_slice(), [Change::Open(_)]));
+        assert_eq!(b.heights().len(), 2);
+        assert_eq!(b.moved_on(&format!("{base}1")).len(), 1);
+        assert_eq!(b.heights().len(), 1);
     }
 }

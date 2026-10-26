@@ -18,9 +18,6 @@ use crate::{macos, sidecar, sound};
 pub const UPDATED_EVENT: &str = "alert-updated";
 const TOAST_LIFETIME: Duration = Duration::from_secs(6);
 const FOCUS_TIMEOUT: Duration = Duration::from_secs(5);
-/// A destroyed window keeps its label for a moment; reopening the same label
-/// right away fails, so the build is retried this many times, 100 ms apart.
-const OPEN_RETRIES: u32 = 10;
 
 #[derive(Default)]
 pub struct Alerts(Mutex<Board>);
@@ -76,7 +73,10 @@ fn apply(app: &AppHandle, changes: Vec<Change>) {
     for c in changes {
         match c {
             Change::Open(s) => {
-                open_window(app, &s.label, s.kind, 0);
+                if !open_window(app, &s.label, s.kind) {
+                    board(app).remove(&s.label);
+                    continue;
+                }
                 sound::play(&s.alert.sound);
                 if s.kind == Kind::Toast {
                     schedule_toast_expiry(app, s.label.clone());
@@ -96,8 +96,9 @@ fn apply(app: &AppHandle, changes: Vec<Change>) {
     relayout(app);
 }
 
-/// Main thread only.
-fn open_window(app: &AppHandle, label: &str, kind: Kind, attempt: u32) {
+/// Main thread only. Labels are never reused, so a build only fails for
+/// real reasons; the caller drops the board entry then.
+fn open_window(app: &AppHandle, label: &str, kind: Kind) -> bool {
     let h = match kind {
         Kind::Panel => PANEL_H,
         Kind::Toast => TOAST_H,
@@ -119,25 +120,12 @@ fn open_window(app: &AppHandle, label: &str, kind: Kind, attempt: u32) {
             log::info!("alerts: opened {label}");
             // Make sure the size is exactly what layout assumes.
             let _ = w.set_size(LogicalSize::new(WIDTH, h));
+            true
         }
-        Err(e) if attempt < OPEN_RETRIES => {
-            log::warn!("alerts: open {label} (attempt {attempt}): {e}; retrying");
-            let app2 = app.clone();
-            let label = label.to_string();
-            tauri::async_runtime::spawn(async move {
-                tokio::time::sleep(Duration::from_millis(100)).await;
-                let app3 = app2.clone();
-                let _ = app2.run_on_main_thread(move || {
-                    // Only if it is still wanted.
-                    let wanted = board(&app3).get(&label).is_some();
-                    if wanted {
-                        open_window(&app3, &label, kind, attempt + 1);
-                        relayout(&app3);
-                    }
-                });
-            });
+        Err(e) => {
+            log::error!("alerts: open {label}: {e}");
+            false
         }
-        Err(e) => log::error!("alerts: open {label}: {e}"),
     }
 }
 
