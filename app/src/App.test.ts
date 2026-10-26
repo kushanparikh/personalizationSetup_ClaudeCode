@@ -165,6 +165,24 @@ describe("App", () => {
     expect(calls.find((c) => c.cmd === "open_settings")?.args).toEqual({ url: rep.pending[0].settingsUrl });
   });
 
+  it("pending_unknown_says_terminal_may_not_be_running", async () => {
+    const rep = fixture();
+    rep.pending[0].status = "unknown";
+    setup(rep);
+    await myHooks();
+    await fireEvent.click(within(screen.getByRole("list", { name: "Pending" })).getByText("Let the app control Terminal"));
+    expect(
+      await screen.findByText("Couldn't check this yet. Terminal may not be running. Click Ask for permission to check again."),
+    ).toBeTruthy();
+    expect(screen.queryByText(/hasn't asked/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Ask for permission" })).toBeTruthy();
+  });
+
+  it("sidebar_explains_the_missing_dock_icon", async () => {
+    setup(fixture());
+    expect(await screen.findByText("No Dock icon. Open again from Spotlight. ⌘Q quits.")).toBeTruthy();
+  });
+
   it("pending_not_asked_offers_the_prompt", async () => {
     const rep = fixture();
     const granted = fixture({ pending: [] });
@@ -248,6 +266,7 @@ describe("App", () => {
     await fireEvent.click(screen.getByRole("button", { name: "Remove" }));
     await waitFor(() => expect(count(calls, "remove_hook")).toBe(1));
     expect(calls.find((c) => c.cmd === "remove_hook")?.args).toEqual({ hookType: "finished" });
+    expect(await screen.findByText("Removed Finished working. Your settings.json was backed up first.")).toBeTruthy();
   });
 
   it("refreshes_on_window_focus", async () => {

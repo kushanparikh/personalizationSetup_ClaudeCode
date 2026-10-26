@@ -154,6 +154,8 @@
       </ul>
     </section>
   {/if}
+
+  <p class="dockless">No Dock icon. Open again from Spotlight. ⌘Q quits.</p>
 </nav>
 
 <style>
@@ -187,6 +189,12 @@
     display: flex;
     flex-direction: column;
     gap: 1px;
+  }
+  .dockless {
+    margin: auto 8px 0;
+    font-size: var(--t-xs);
+    color: var(--c-muted);
+    line-height: 1.35;
   }
   .none {
     margin: 0 8px 2px;

@@ -2,6 +2,10 @@
 
 Tauri 2 desktop app (Svelte 5 + Vite + TypeScript frontend, Rust in `src-tauri`) that bundles the Go `pcs` sidecar from `../sidecar`.
 
+## Running the app
+
+The app has no Dock icon and no menu-bar item. To open it again, use Spotlight or `~/Applications`. Press ⌘Q while its window is focused to quit it. Any Claude Code hook starts it again in the background.
+
 ## Prerequisites
 
 - macOS with Xcode Command Line Tools
