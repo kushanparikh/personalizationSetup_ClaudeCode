@@ -48,7 +48,7 @@ export class AppStore {
       const hook = report.hooks.find((h) => h.type === type);
       let asked = false;
       for (const need of hook?.needs ?? []) {
-        if (need.status === "not-asked" || need.status === "unknown") {
+        if (need.askable && (need.status === "not-asked" || need.status === "unknown")) {
           await api.requestPermission(need.id);
           asked = true;
         }
@@ -64,7 +64,7 @@ export class AppStore {
       } else {
         const titles = (after?.needs ?? [])
           .filter((n) => n.status !== "granted")
-          .map((n) => report.pending.find((p) => p.id === n.id)?.title ?? n.id);
+          .map((n) => n.title);
         this.notice = `⚠️ Saved. Waiting on: ${titles.join(", ")} (see Pending).`;
       }
     });

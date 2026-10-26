@@ -45,9 +45,10 @@ type HookView struct {
 
 // Need is one permission a hook needs and its current status.
 type Need struct {
-	ID     perms.ID     `json:"id"`
-	Title  string       `json:"title"`
-	Status perms.Status `json:"status"`
+	ID      perms.ID     `json:"id"`
+	Title   string       `json:"title"`
+	Status  perms.Status `json:"status"`
+	Askable bool         `json:"askable"`
 }
 
 // OtherHook is a hook entry the app doesn't own; it is shown read-only.
@@ -157,7 +158,7 @@ func Build(f *settings.File, loadErr error, st *state.Store, have map[perms.ID]p
 			Questions: d.Questions, Note: d.Note,
 			Enabled: enabled, Answers: a, Status: StatusOff, Needs: []Need{}}
 		for _, id := range hooktypes.Needs(d.Type, a) {
-			v.Needs = append(v.Needs, Need{ID: id, Title: perms.Lookup(id).Title, Status: status(id)})
+			v.Needs = append(v.Needs, Need{ID: id, Title: perms.Lookup(id).Title, Status: status(id), Askable: perms.Lookup(id).Askable})
 		}
 		if enabled {
 			v.Status = StatusOK

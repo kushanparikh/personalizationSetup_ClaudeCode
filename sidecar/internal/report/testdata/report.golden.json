@@ -48,7 +48,8 @@
         {
           "id": "automation-terminal",
           "title": "Control Terminal",
-          "status": "not-asked"
+          "status": "not-asked",
+          "askable": true
         }
       ]
     },
@@ -80,7 +81,8 @@
         {
           "id": "automation-terminal",
           "title": "Control Terminal",
-          "status": "not-asked"
+          "status": "not-asked",
+          "askable": true
         }
       ]
     }

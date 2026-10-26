@@ -34,7 +34,7 @@ export interface HookView {
   enabled: boolean;
   answers: Answers;
   status: HookStatus;
-  needs: { id: PermId; title: string; status: PermStatus }[];
+  needs: { id: PermId; title: string; status: PermStatus; askable: boolean }[];
 }
 
 export interface OtherHook {

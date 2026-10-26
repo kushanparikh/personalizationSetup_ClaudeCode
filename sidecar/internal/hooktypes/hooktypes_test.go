@@ -172,7 +172,12 @@ func TestQuestionKeysMatchAnswers(t *testing.T) {
 		if len(d.Questions) == 0 {
 			t.Errorf("%s has no questions", d.Type)
 		}
+		seen := map[string]bool{}
 		for _, q := range d.Questions {
+			if seen[q.Key] {
+				t.Errorf("%s: duplicate question key %q", d.Type, q.Key)
+			}
+			seen[q.Key] = true
 			k, ok := fields[q.Key]
 			if !ok {
 				t.Errorf("%s: question key %q is not an Answers json tag", d.Type, q.Key)
@@ -186,6 +191,19 @@ func TestQuestionKeysMatchAnswers(t *testing.T) {
 			}
 			if q.Label == "" {
 				t.Errorf("%s: question %q has no label", d.Type, q.Key)
+			}
+		}
+	}
+}
+
+func TestNeedsAreRegistered(t *testing.T) {
+	for _, d := range All() {
+		for _, on := range []bool{false, true} {
+			a := Answers{ClickToFocus: on}
+			for _, id := range Needs(d.Type, a) {
+				if perms.Lookup(id).Title == "" {
+					t.Errorf("%s needs unregistered permission %q", d.Type, id)
+				}
 			}
 		}
 	}

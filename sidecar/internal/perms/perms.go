@@ -46,6 +46,8 @@ var registry = []Info{
 		Title:       "Control Terminal",
 		Steps:       "Open System Settings → Privacy & Security → Automation → " + paths.AppName + ", and turn on Terminal.",
 		SettingsURL: "x-apple.systempreferences:com.apple.preference.security?Privacy_Automation",
+		// Askable: macOS lists an app under Automation only after it has asked once,
+		// so Settings can't help until the app has requested it.
 		Askable:     true,
 		UnknownHint: "Couldn't check this yet. Terminal may not be running. Click Ask for permission to check again.",
 		Check:       func() Status { return CheckAutomation(terminalBundleID) },

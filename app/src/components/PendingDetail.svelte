@@ -3,7 +3,7 @@
   import type { PendingItem } from "../lib/types";
 
   let { store, item }: { store: AppStore; item: PendingItem } = $props();
-  // macOS lists an app under Automation only after it has asked once, so Settings can't help yet.
+  // Only permissions the app can trigger itself (askable) get an Ask button; the rest go straight to Settings.
   let canAsk = $derived(item.askable && (item.status === "not-asked" || item.status === "unknown"));
 </script>
 

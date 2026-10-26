@@ -16,7 +16,7 @@ function report(over: Partial<Report> = {}, perm: PermStatus = "not-asked", ok =
         enabled: true,
         answers,
         status: ok ? "ok" : "pending",
-        needs: [{ id: "automation-terminal", title: "Control Terminal", status: ok ? "granted" : perm }],
+        needs: [{ id: "automation-terminal", title: "Control Terminal", status: ok ? "granted" : perm, askable: true }],
       },
     ],
     available: [],
@@ -89,6 +89,20 @@ describe("AppStore", () => {
     s.report = report();
     await s.saveAndApply("finished", answers);
     expect(calls).not.toContain("request_permission");
+    expect(s.notice).toBe("⚠️ Saved. Waiting on: Control Terminal (see Pending).");
+  });
+
+  it("save_skips_non_askable_permission", async () => {
+    const nonAskable = () => {
+      const r = report({}, "unknown");
+      r.hooks[0].needs[0].askable = false;
+      return r;
+    };
+    const calls = script({ apply_hook: nonAskable });
+    const s = new AppStore();
+    s.report = report();
+    await s.saveAndApply("finished", answers);
+    expect(calls).toEqual(["apply_hook"]);
     expect(s.notice).toBe("⚠️ Saved. Waiting on: Control Terminal (see Pending).");
   });
 

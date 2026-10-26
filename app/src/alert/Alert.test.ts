@@ -60,7 +60,7 @@ describe("Alert", () => {
     expect(screen.queryByRole("button", { name: "Dismiss" })).toBeNull();
   });
 
-  it("default_tones_match_todays_look", async () => {
+  it("panel_tone_sets_data_tone", async () => {
     setup("panel-a", panel());
     await screen.findByText("graphql-testing-framework");
     expect((document.querySelector(".alert") as HTMLElement).dataset.tone).toBe("wait");

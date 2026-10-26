@@ -3,7 +3,7 @@ import { render, screen, fireEvent, waitFor, within } from "@testing-library/sve
 import { mockIPC } from "@tauri-apps/api/mocks";
 import { emit } from "@tauri-apps/api/event";
 import App from "./App.svelte";
-import type { HookView, Question, Report } from "./lib/types";
+import { HOOK_STATUS_TEXT, type HookView, type Question, type Report } from "./lib/types";
 import golden from "../../sidecar/internal/report/testdata/report.golden.json";
 
 // Maps string-literal unions to string, which is all JSON import types give us.
@@ -46,7 +46,7 @@ const finished: HookView = {
   enabled: true,
   answers: { untrackedDirty: false, sound: "Glass", clickToFocus: true },
   status: "ok",
-  needs: [{ id: "automation-terminal", title: "Control Terminal", status: "granted" }],
+  needs: [{ id: "automation-terminal", title: "Control Terminal", status: "granted", askable: true }],
 };
 
 const inputNeeded: HookView = {
@@ -58,7 +58,7 @@ const inputNeeded: HookView = {
   enabled: true,
   answers: { untrackedDirty: false, sound: "Ping", clickToFocus: true },
   status: "pending",
-  needs: [{ id: "automation-terminal", title: "Control Terminal", status: "denied" }],
+  needs: [{ id: "automation-terminal", title: "Control Terminal", status: "denied", askable: true }],
 };
 
 function fixture(over: Partial<Report> = {}): Report {
@@ -142,9 +142,37 @@ describe("App", () => {
     setup(rep);
     const list = await myHooks();
     for (const h of rep.hooks) expect(within(list).getByText(h.name)).toBeTruthy();
+    const permStatuses = ["granted", "denied", "not-asked", "unknown"];
+    for (const h of rep.hooks) {
+      expect(Object.keys(HOOK_STATUS_TEXT)).toContain(h.status);
+      for (const n of h.needs) expect(permStatuses).toContain(n.status);
+    }
+    for (const p of rep.pending) expect(permStatuses).toContain(p.status);
     const pending = screen.getByRole("list", { name: "Pending" });
     await fireEvent.click(within(pending).getByText(rep.pending[0].title));
     expect(typeof rep.pending[0].steps).toBe("string");
+    expect(await screen.findByText(rep.pending[0].steps)).toBeTruthy();
+  });
+
+  it("pending_detail_not_askable_shows_steps_and_no_ask_button", async () => {
+    const rep = fixture();
+    rep.pending[0] = { ...rep.pending[0], askable: false, status: "not-asked" };
+    setup(rep);
+    await myHooks();
+    const pending = screen.getByRole("list", { name: "Pending" });
+    await fireEvent.click(within(pending).getByText(rep.pending[0].title));
+    expect(await screen.findByText(rep.pending[0].steps)).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Ask for permission" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Open Settings" })).toBeTruthy();
+  });
+
+  it("pending_detail_unknown_without_hint_falls_back_to_steps", async () => {
+    const rep = fixture();
+    rep.pending[0] = { ...rep.pending[0], status: "unknown", unknownHint: "" };
+    setup(rep);
+    await myHooks();
+    const pending = screen.getByRole("list", { name: "Pending" });
+    await fireEvent.click(within(pending).getByText(rep.pending[0].title));
     expect(await screen.findByText(rep.pending[0].steps)).toBeTruthy();
   });
 

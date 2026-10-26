@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/perms"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"time"
 
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/ipc"
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/perms"
 )
 
 var pcsBin string
