@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { AppStore, Selection } from "../lib/store.svelte";
-  import type { HookStatus, Report } from "../lib/types";
+  import { HOOK_STATUS_TEXT, type HookStatus, type Report } from "../lib/types";
 
   let { store, report, current }: { store: AppStore; report: Report; current: Selection } = $props();
 
@@ -9,11 +9,6 @@
   let menuEl = $state<HTMLDivElement>();
 
   const glyph: Record<HookStatus, string> = { ok: "✅", pending: "⚠️", off: "⏸" };
-  const statusText: Record<HookStatus, string> = {
-    ok: "Working",
-    pending: "Waiting on permission",
-    off: "Off",
-  };
 
   const otherOpen = $derived(current.kind === "other");
 
@@ -67,12 +62,12 @@
               class="row"
               class:selected={isHook(h.type)}
               aria-current={isHook(h.type) ? "page" : undefined}
-              title={statusText[h.status]}
+              title={HOOK_STATUS_TEXT[h.status]}
               onclick={() => select({ kind: "hook", type: h.type })}
             >
               <span class="glyph" aria-hidden="true">{glyph[h.status]}</span>
               <span class="name">{h.name}</span>
-              <span class="sr">{statusText[h.status]}</span>
+              <span class="sr">{HOOK_STATUS_TEXT[h.status]}</span>
             </button>
           </li>
         {/each}
@@ -255,14 +250,6 @@
     border-radius: 50%;
     background: var(--c-lamp-wait);
   }
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-
   .add {
     position: relative;
     margin-top: 2px;

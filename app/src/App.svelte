@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, onServeStatus } from "./lib/api";
+  import { api, errorText, onServeStatus } from "./lib/api";
   import { AppStore, type Selection } from "./lib/store.svelte";
   import Sidebar from "./components/Sidebar.svelte";
   import Banner from "./components/Banner.svelte";
@@ -39,7 +39,7 @@
   );
 
   function openLog() {
-    api.openLog().catch((e) => (store.error = e instanceof Error ? e.message : String(e)));
+    api.openLog().catch((e) => (store.error = errorText(e)));
   }
 
   // Coming back to the window re-reads settings and permissions (spec §4.3) without clearing messages.
@@ -52,7 +52,7 @@
       .then((r) => {
         if (!store.busy && store.report === seen) store.report = r;
       })
-      .catch((e) => (store.error = e instanceof Error ? e.message : String(e)));
+      .catch((e) => (store.error = errorText(e)));
   }
 
   onMount(() => {
@@ -167,6 +167,14 @@
     -webkit-user-select: none;
     user-select: none;
     cursor: default;
+  }
+
+  :global(.sr) {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
   }
 
   /* Buttons shared by every detail view. */

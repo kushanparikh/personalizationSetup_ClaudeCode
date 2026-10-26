@@ -12,7 +12,7 @@ use tauri::{
 
 use crate::board::{Board, Change, Kind, Shown};
 use crate::events::ServeLine;
-use crate::layout::{stack, Rect, PANEL_H, TOAST_H, WIDTH};
+use crate::layout::{stack, Rect, WIDTH};
 use crate::{macos, sidecar, sound};
 
 pub const UPDATED_EVENT: &str = "alert-updated";
@@ -99,10 +99,7 @@ fn apply(app: &AppHandle, changes: Vec<Change>) {
 /// Main thread only. Labels are never reused, so a build only fails for
 /// real reasons; the caller drops the board entry then.
 fn open_window(app: &AppHandle, label: &str, kind: Kind) -> bool {
-    let h = match kind {
-        Kind::Panel => PANEL_H,
-        Kind::Toast => TOAST_H,
-    };
+    let h = kind.height();
     let url = WebviewUrl::App(format!("alert.html?label={label}").into());
     let built = WebviewWindowBuilder::new(app, label, url)
         .title("")

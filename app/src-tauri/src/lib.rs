@@ -41,7 +41,7 @@ pub(crate) fn pcs_command(app: &AppHandle) -> Result<Command, String> {
     })
 }
 
-fn log_dir() -> PathBuf {
+pub(crate) fn log_dir() -> PathBuf {
     let home = std::env::var_os("HOME").map(PathBuf::from).unwrap_or_default();
     home.join("Library/Logs/Personalization Setup")
 }

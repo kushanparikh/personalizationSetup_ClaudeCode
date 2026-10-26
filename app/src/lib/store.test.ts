@@ -56,6 +56,7 @@ describe("AppStore", () => {
       get_state: () => report({}, "granted", true),
     });
     const s = new AppStore();
+    s.report = report();
     await s.saveAndApply("finished", answers);
     expect(calls).toEqual(["apply_hook", "request_permission", "get_state"]);
     expect(s.notice).toBe("✅ Saved. Finished working is set up.");
@@ -70,6 +71,7 @@ describe("AppStore", () => {
       get_state: () => report({}, "granted", true),
     });
     const s = new AppStore();
+    s.report = report();
     await s.saveAndApply("finished", answers);
     expect(calls).toEqual(["apply_hook", "request_permission", "get_state"]);
     expect(s.notice).toBe("✅ Saved. Finished working is set up.");
@@ -81,6 +83,7 @@ describe("AppStore", () => {
       get_state: () => report({}, "denied"),
     });
     const s = new AppStore();
+    s.report = report();
     await s.saveAndApply("finished", answers);
     expect(calls).not.toContain("request_permission");
     expect(s.notice).toBe("⚠️ Saved. Waiting on: Control Terminal (see Pending).");

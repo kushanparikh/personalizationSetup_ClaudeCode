@@ -11,6 +11,15 @@ pub enum Kind {
     Toast,
 }
 
+impl Kind {
+    pub fn height(self) -> f64 {
+        match self {
+            Kind::Panel => PANEL_H,
+            Kind::Toast => TOAST_H,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Shown {
     pub label: String,
@@ -84,11 +93,7 @@ impl Board {
         self.items
             .iter()
             .map(|s| {
-                let h = match s.kind {
-                    Kind::Panel => PANEL_H,
-                    Kind::Toast => TOAST_H,
-                };
-                (s.label.clone(), h)
+                (s.label.clone(), s.kind.height())
             })
             .collect()
     }

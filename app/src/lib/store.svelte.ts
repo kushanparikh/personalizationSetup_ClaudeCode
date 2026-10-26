@@ -1,4 +1,4 @@
-import { api } from "./api";
+import { api, errorText } from "./api";
 import type { Answers, HookType, PermId, Report, ServeStatus } from "./types";
 
 export type Selection =
@@ -20,11 +20,6 @@ export class AppStore {
     return !this.busy && this.report !== null && this.report.settingsError === "";
   }
 
-  /** Writes are refused while busy or when settings.json is invalid (a null report is allowed: the backend decides). */
-  private get blocked(): boolean {
-    return this.busy || (this.report !== null && this.report.settingsError !== "");
-  }
-
   private async run(fn: () => Promise<void>): Promise<void> {
     this.busy = true;
     this.error = null;
@@ -32,7 +27,7 @@ export class AppStore {
     try {
       await fn();
     } catch (e) {
-      this.error = e instanceof Error ? e.message : String(e);
+      this.error = errorText(e);
     } finally {
       this.busy = false;
     }
@@ -45,7 +40,7 @@ export class AppStore {
   }
 
   saveAndApply(type: HookType, answers: Answers): Promise<void> {
-    if (this.blocked) return Promise.resolve();
+    if (!this.canWrite) return Promise.resolve();
     return this.run(async () => {
       let report = await api.apply(type, answers);
       this.report = report;
@@ -76,14 +71,14 @@ export class AppStore {
   }
 
   setEnabled(type: HookType, on: boolean): Promise<void> {
-    if (this.blocked) return Promise.resolve();
+    if (!this.canWrite) return Promise.resolve();
     return this.run(async () => {
       this.report = on ? await api.enable(type) : await api.disable(type);
     });
   }
 
   remove(type: HookType): Promise<void> {
-    if (this.blocked) return Promise.resolve();
+    if (!this.canWrite) return Promise.resolve();
     const name = this.report?.hooks.find((h) => h.type === type)?.name ?? type;
     return this.run(async () => {
       this.report = await api.remove(type);
@@ -109,9 +104,5 @@ export class AppStore {
 
   openSettings(url: string): Promise<void> {
     return this.run(() => api.openSettings(url));
-  }
-
-  openLog(): Promise<void> {
-    return this.run(() => api.openLog());
   }
 }

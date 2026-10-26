@@ -9,11 +9,16 @@ export class ApiError extends Error {
   }
 }
 
+/** Tauri rejects with a bare string; everything past `call` is an ApiError. */
+export function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
   try {
     return await invoke<T>(cmd, args);
   } catch (e) {
-    throw new ApiError(e instanceof Error ? e.message : String(e));
+    throw new ApiError(errorText(e));
   }
 }
 

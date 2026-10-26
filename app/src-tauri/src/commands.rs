@@ -111,8 +111,7 @@ pub fn open_settings(url: String) -> Result<Value, String> {
 
 #[tauri::command]
 pub fn open_log() -> Result<Value, String> {
-    let home = std::env::var("HOME").map_err(|_| "HOME is not set".to_string())?;
-    open_target(&format!("{home}/Library/Logs/Personalization Setup/pcs.log"))
+    open_target(&crate::log_dir().join("pcs.log").to_string_lossy())
 }
 
 #[cfg(test)]

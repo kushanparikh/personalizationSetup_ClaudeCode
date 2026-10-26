@@ -14,7 +14,7 @@
 
   const parts = $derived(splitTitle(view?.title ?? ""));
   const isPanel = $derived(view?.kind === "panel");
-  const body = $derived(view?.message || (isPanel ? "" : "Finished working"));
+  const body = $derived(view?.message ?? "");
   const footer = $derived(view?.focus ? "Click to go to the session" : "Click to dismiss");
 
   function show(v: AlertView | null) {

@@ -253,8 +253,8 @@ const goldenSettings = `{
 }
 `
 
-// TestReportGolden pins the JSON the app reads. The Rust and TS tests read
-// the same file, so a shape change here fails them until the golden is
+// TestReportGolden pins the JSON the app reads. The TS tests read
+// this file (Rust reads serve-lines.golden.jsonl), so a shape change here fails them until the golden is
 // regenerated (go test ./cmd/pcs ./internal/report -update) and the consumers are fixed.
 func TestReportGolden(t *testing.T) {
 	f, err := load(t, goldenSettings)

@@ -1,7 +1,7 @@
 <script lang="ts">
   import HookForm from "./HookForm.svelte";
   import type { AppStore } from "../lib/store.svelte";
-  import type { Answers, HookStatus, HookView, PermId, PermStatus, Report } from "../lib/types";
+  import { HOOK_STATUS_TEXT, type Answers, type HookView, type PermId, type PermStatus, type Report } from "../lib/types";
 
   let { store, report, hook }: { store: AppStore; report: Report; hook: HookView } = $props();
 
@@ -10,11 +10,6 @@
   let answers = $state<Answers>({ ...hook.answers });
   let confirming = $state(false);
 
-  const statusText: Record<HookStatus, string> = {
-    ok: "Working",
-    pending: "Waiting on permission",
-    off: "Off",
-  };
   const permText: Record<PermStatus, string> = {
     granted: "Allowed",
     denied: "Not allowed",
@@ -33,7 +28,7 @@
     <span class="lamp" aria-hidden="true"></span>
     <div>
       <h1>{hook.name}</h1>
-      <p class="status">{statusText[hook.status]}</p>
+      <p class="status">{HOOK_STATUS_TEXT[hook.status]}</p>
     </div>
   </header>
   {#if hook.description}<p class="desc">{hook.description}</p>{/if}

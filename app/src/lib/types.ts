@@ -55,6 +55,12 @@ export type ServeStatus =
   | { state: "ready" }
   | { state: "down"; reason: string };
 
+export const HOOK_STATUS_TEXT: Record<HookStatus, string> = {
+  ok: "Working",
+  pending: "Waiting on permission",
+  off: "Off",
+};
+
 export const SOUNDS = [
   "none", "Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero",
   "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink",

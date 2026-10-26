@@ -49,13 +49,6 @@
     gap: 12px;
     min-width: 0;
   }
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
   .field {
     display: grid;
     grid-template-columns: 64px minmax(0, 200px);
