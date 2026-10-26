@@ -79,15 +79,33 @@ fn build_tray(app: &tauri::App) -> tauri::Result<tauri::tray::TrayIcon> {
     builder.build(app)
 }
 
+/// True when macOS runs this executable from an App Translocation mount
+/// (a quarantined app launched from where it was unpacked).
+fn is_translocated(exe: &Path) -> bool {
+    exe.to_string_lossy().contains("/AppTranslocation/")
+}
+
 /// Points `~/.pcs/bin/pcs-hook` at this bundle's `pcs`. Logged, never fatal.
+/// Skipped under App Translocation.
 async fn install_launcher(app: AppHandle) {
-    let bin = match std::env::current_exe() {
-        Ok(exe) => launcher_bin(&exe),
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
         Err(e) => {
             log::error!("install-launcher: cannot resolve current exe: {e}");
             return;
         }
     };
+    if is_translocated(&exe) {
+        // A translocated copy lives in a temporary read-only mount that is gone
+        // after a reboot; pointing the hooks there would silently break them.
+        log::error!(
+            "install-launcher: skipped, the app is running under App Translocation ({}); \
+             reinstall with ./install.sh so it runs from ~/Applications",
+            exe.display()
+        );
+        return;
+    }
+    let bin = launcher_bin(&exe);
     let cmd = match pcs_command(&app) {
         Ok(c) => c.args(["install-launcher", "--bin", &bin.to_string_lossy()]),
         Err(e) => {
@@ -208,5 +226,16 @@ mod tests {
             launcher_bin(Path::new("/A.app/Contents/MacOS/personalization-setup")),
             PathBuf::from("/A.app/Contents/MacOS/pcs")
         );
+    }
+
+    #[test]
+    fn is_translocated_detects_translocation_mount() {
+        assert!(is_translocated(Path::new(
+            "/private/var/folders/xy/abc/T/AppTranslocation/1234-ABCD/d/Personalization Setup.app/Contents/MacOS/personalization-setup"
+        )));
+        assert!(!is_translocated(Path::new(
+            "/Users/me/Applications/Personalization Setup.app/Contents/MacOS/personalization-setup"
+        )));
+        assert!(!is_translocated(Path::new("/Users/me/AppTranslocationNotes/x")));
     }
 }
