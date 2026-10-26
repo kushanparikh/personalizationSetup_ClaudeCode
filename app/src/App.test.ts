@@ -271,7 +271,7 @@ describe("App", () => {
 
   it("sidebar_explains_the_missing_dock_icon", async () => {
     setup(fixture());
-    expect(await screen.findByText("No Dock icon. Open again from Spotlight. ⌘Q quits.")).toBeTruthy();
+    expect(await screen.findByText("No Dock icon. Use the menu-bar icon or Spotlight. ⌘Q quits.")).toBeTruthy();
   });
 
   it("pending_not_asked_offers_the_prompt", async () => {

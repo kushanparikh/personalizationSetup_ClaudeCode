@@ -151,7 +151,7 @@
   {/if}
 
   <div class="foot">
-    <p class="dockless">No Dock icon. Open again from Spotlight. ⌘Q quits.</p>
+    <p class="dockless">No Dock icon. Use the menu-bar icon or Spotlight. ⌘Q quits.</p>
     <button
       type="button"
       class="uninstall"
