@@ -3,10 +3,14 @@
 # in a subshell with a fresh temp HOME. Helpers below are shared by all tests.
 set -euo pipefail
 
-TEST_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$TEST_DIR/../.." && pwd)"
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# PCS_TEST_DIR lets the runner's own self-tests point it at temp test files.
+TEST_DIR="${PCS_TEST_DIR:-$SELF_DIR}"
+REPO_ROOT="$(cd "$SELF_DIR/../.." && pwd)"
 export REPO_ROOT
 
+# Note: an assertion run inside $(...) only exits that command substitution;
+# use `$(...) || fail ...` or assert on a captured value afterwards.
 fail() { printf '%s' "$*" >"$REASON_FILE"; exit 1; }
 
 assert_eq() { # expected actual [label]
@@ -26,17 +30,23 @@ stub() {
 }
 
 run_test() { # fn
-  local fn="$1" tmp rc=0
+  local fn="$1" tmp rc
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/pcs-test.XXXXXX")"
   mkdir -p "$tmp/home"
   REASON_FILE="$tmp/reason"
+  # set -e is ignored in a subshell used as an `||`/`if` condition, so run it
+  # as a plain statement with errexit toggled around it.
+  set +e
   (
+    set -e
     export HOME="$tmp/home" TEST_TMP="$tmp" REASON_FILE
     STUB_BIN="$tmp/bin"; export STUB_BIN
     PATH="$STUB_BIN:$PATH"
     cd "$tmp"
     "$fn" >"$tmp/out" 2>&1
-  ) || rc=$?
+  )
+  rc=$?
+  set -e
   if [ "$rc" -eq 0 ]; then
     echo "ok $fn"; PASSED=$((PASSED + 1))
   else
@@ -52,7 +62,8 @@ run_test() { # fn
 PASSED=0; FAILED=0
 for f in "$TEST_DIR"/*_test.sh; do
   [ -e "$f" ] || continue
-  # Load the file in a subshell to discover its t_* functions, then run them.
+  # Discover this file's t_* functions in a subshell, then source it here and
+  # unset them afterwards so each function runs exactly once.
   fns="$( (
     # shellcheck disable=SC1090
     . "$f"
@@ -61,6 +72,7 @@ for f in "$TEST_DIR"/*_test.sh; do
   # shellcheck disable=SC1090
   . "$f"
   for fn in $fns; do run_test "$fn"; done
+  for fn in $fns; do unset -f "$fn"; done
 done
 
 echo "$PASSED passed, $FAILED failed"

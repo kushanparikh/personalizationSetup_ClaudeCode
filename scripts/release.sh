@@ -31,6 +31,7 @@ fi
 
 "$ROOT_DIR/scripts/check-version.sh" "$TAG"
 
+command -v rustup >/dev/null 2>&1 || { echo "rustup not found on PATH; install Rust from https://rustup.rs" >&2; exit 1; }
 installed="$(rustup target list --installed)"
 for t in aarch64-apple-darwin x86_64-apple-darwin; do
   if ! printf '%s\n' "$installed" | grep -qx "$t"; then
@@ -65,5 +66,10 @@ if [ "$DRY_RUN" -eq 1 ]; then
   echo "Dry run: not publishing $TAG."
   exit 0
 fi
+if [ -z "$(git branch -r --contains HEAD 2>/dev/null)" ]; then
+  echo "Push this commit first: git push" >&2
+  exit 1
+fi
 gh release create "$TAG" "$ZIP" "$SHA" --repo "$PCS_REPO" \
+  --target "$(git rev-parse HEAD)" \
   --title "Personalization Setup $TAG" --generate-notes
