@@ -186,7 +186,7 @@ cp "'"$TEST_TMP"'/src/$(basename "$last")" "$out"'
   stub curl 'exit 22'
   inst_run
   assert_eq 1 "$INST_RC" "failure exit"
-  assert_contains "$INST_OUT" "Couldn't download the app. The repository may be private: install GitHub CLI (brew install gh), run 'gh auth login', and re-run. Or download Personalization-Setup-macos.zip from the Releases page and run ./install.sh --zip <file>."
+  assert_contains "$INST_OUT" "Couldn't download the app. Check your internet connection and re-run. Or download Personalization-Setup-macos.zip and its .sha256 file from the Releases page and run ./install.sh --zip <file>."
 }
 
 t_install_download_requires_checksum() {
