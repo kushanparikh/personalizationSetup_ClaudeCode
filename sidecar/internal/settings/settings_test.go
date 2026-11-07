@@ -1,4 +1,4 @@
-package settings
+package settings_test
 
 import (
 	"errors"
@@ -9,8 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/agent/claude"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/hooktypes"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/paths"
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/settings"
 )
 
 // userSettings is the user's real settings shape, with the 3 hand-built hooks.
@@ -79,7 +81,7 @@ var finishedDefault = hooktypes.Answers{Sound: "Glass", ClickToFocus: true}
 
 func entries(t *testing.T, typ hooktypes.Type, a hooktypes.Answers) []hooktypes.Entry {
 	t.Helper()
-	es := hooktypes.Entries(typ, a)
+	es := claude.Entries(typ, a)
 	if es == nil {
 		t.Fatalf("Entries(%s, %+v) is nil", typ, a)
 	}
@@ -95,26 +97,26 @@ func stopOnly(t *testing.T, a hooktypes.Answers) []hooktypes.Entry {
 
 // setup writes content to dir/settings.json and returns the path and save
 // options using dir/backups.
-func setup(t *testing.T, content string) (string, SaveOptions) {
+func setup(t *testing.T, content string) (string, settings.SaveOptions) {
 	t.Helper()
 	dir := t.TempDir()
 	p := filepath.Join(dir, "settings.json")
 	if err := os.WriteFile(p, []byte(content), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	return p, SaveOptions{BackupDir: filepath.Join(dir, "backups"), Keep: 5}
+	return p, settings.SaveOptions{BackupDir: filepath.Join(dir, "backups"), Keep: 5}
 }
 
-func load(t *testing.T, p string) *File {
+func load(t *testing.T, p string) *settings.File {
 	t.Helper()
-	f, err := Load(p)
+	f, err := settings.Load(p)
 	if err != nil {
-		t.Fatalf("Load: %v", err)
+		t.Fatalf("settings.Load: %v", err)
 	}
 	return f
 }
 
-func save(t *testing.T, f *File, o SaveOptions) string {
+func save(t *testing.T, f *settings.File, o settings.SaveOptions) string {
 	t.Helper()
 	b, _, err := f.Save(o)
 	if err != nil {
@@ -178,9 +180,9 @@ func TestSetOwnedKeepsEverythingElse(t *testing.T) {
 	}
 }
 
-func ownedStopGroups(t *testing.T, f *File) []HookEntry {
+func ownedStopGroups(t *testing.T, f *settings.File) []settings.HookEntry {
 	t.Helper()
-	var got []HookEntry
+	var got []settings.HookEntry
 	for _, h := range f.Hooks() {
 		if h.Owned && h.Parsed.Type == hooktypes.Finished {
 			got = append(got, h)
@@ -365,7 +367,7 @@ func TestHooksInFileOrder(t *testing.T) {
 }`
 	p, _ := setup(t, in)
 	got := load(t, p).Hooks()
-	want := []HookEntry{
+	want := []settings.HookEntry{
 		{Event: "Stop"},
 		{Event: "Stop", Command: ourStop, Owned: true,
 			Parsed: hooktypes.Parsed{Type: hooktypes.Finished, Sub: "stop", Answers: finishedDefault}},
@@ -382,10 +384,10 @@ func TestHooksInFileOrder(t *testing.T) {
 func TestInvalidRefusesWrite(t *testing.T) {
 	bad := "{\n  \"a\": 1,\n}"
 	p, _ := setup(t, bad)
-	_, err := Load(p)
-	var ie *InvalidError
+	_, err := settings.Load(p)
+	var ie *settings.InvalidError
 	if !errors.As(err, &ie) {
-		t.Fatalf("want *InvalidError, got %T %v", err, err)
+		t.Fatalf("want *settings.InvalidError, got %T %v", err, err)
 	}
 	if ie.Line != 3 || ie.Path != p {
 		t.Fatalf("got %+v, want line 3 path %s", ie, p)
@@ -395,7 +397,7 @@ func TestInvalidRefusesWrite(t *testing.T) {
 		t.Fatalf("Error() = %q, want %q", ie.Error(), wantMsg)
 	}
 
-	// Valid at Load, invalid by Save.
+	// Valid at settings.Load, invalid by Save.
 	p, o := setup(t, userSettings)
 	f := load(t, p)
 	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
@@ -404,7 +406,7 @@ func TestInvalidRefusesWrite(t *testing.T) {
 	}
 	backup, _, err := f.Save(o)
 	if !errors.As(err, &ie) {
-		t.Fatalf("Save: want *InvalidError, got %T %v", err, err)
+		t.Fatalf("Save: want *settings.InvalidError, got %T %v", err, err)
 	}
 	if backup != "" {
 		t.Fatalf("backup %q made for an invalid file", backup)
@@ -475,7 +477,7 @@ func TestSaveFollowsSymlink(t *testing.T) {
 	}
 	f := load(t, link)
 	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
-	save(t, f, SaveOptions{BackupDir: filepath.Join(dir, "backups"), Keep: 5})
+	save(t, f, settings.SaveOptions{BackupDir: filepath.Join(dir, "backups"), Keep: 5})
 
 	st, err := os.Lstat(link)
 	if err != nil {
@@ -546,7 +548,7 @@ func TestMissingFileCreated(t *testing.T) {
 	}
 	f := load(t, p)
 	f.SetOwned(hooktypes.Finished, stopOnly(t, finishedDefault))
-	if b := save(t, f, SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}); b != "" {
+	if b := save(t, f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}); b != "" {
 		t.Fatalf("backup %q for a missing file", b)
 	}
 	want := `{
@@ -599,34 +601,6 @@ func TestEmptyFileIsEmptyObject(t *testing.T) {
 	}
 }
 
-func TestPruneOrderWithSuffixes(t *testing.T) {
-	dir := t.TempDir()
-	names := []string{
-		"settings.pcs-backup-20261024T101010.000Z.json",
-		"settings.pcs-backup-20261024T101010.123Z.json",
-		"settings.pcs-backup-20261024T101010.123Z-1.json",
-		"settings.pcs-backup-20261024T101010.123Z-2.json",
-		"settings.pcs-backup-20261024T101010.123Z-10.json",
-	}
-	for _, n := range names {
-		if err := os.WriteFile(filepath.Join(dir, n), nil, 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if err := prune(dir, 2); err != nil {
-		t.Fatal(err)
-	}
-	var got []string
-	ents, _ := os.ReadDir(dir)
-	for _, e := range ents {
-		got = append(got, e.Name())
-	}
-	want := []string{names[4], names[3]} // ReadDir sorts by name: "-10" < "-2"
-	if !slices.Equal(got, want) {
-		t.Fatalf("kept %v, want %v", got, want)
-	}
-}
-
 func backupNames(t *testing.T, dir string) []string {
 	t.Helper()
 	ents, err := os.ReadDir(dir)
@@ -635,7 +609,7 @@ func backupNames(t *testing.T, dir string) []string {
 	}
 	var out []string
 	for _, e := range ents {
-		if backupName.MatchString(e.Name()) {
+		if settings.BackupName.MatchString(e.Name()) {
 			out = append(out, e.Name())
 		}
 	}
@@ -680,8 +654,8 @@ func TestSaveRefusesIfChangedSinceLoad(t *testing.T) {
 		}
 		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
 		_, _, err := f.Save(o)
-		if !errors.Is(err, ErrChangedSinceLoad) {
-			t.Fatalf("Save err = %v, want ErrChangedSinceLoad", err)
+		if !errors.Is(err, settings.ErrChangedSinceLoad) {
+			t.Fatalf("Save err = %v, want settings.ErrChangedSinceLoad", err)
 		}
 		if err.Error() != "~/.claude/settings.json changed while this app was editing it. Nothing was changed; try again." {
 			t.Fatalf("message = %q", err.Error())
@@ -701,8 +675,8 @@ func TestSaveRefusesIfChangedSinceLoad(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
-		if _, _, err := f.Save(SaveOptions{BackupDir: filepath.Join(dir, "backups")}); !errors.Is(err, ErrChangedSinceLoad) {
-			t.Fatalf("Save err = %v, want ErrChangedSinceLoad", err)
+		if _, _, err := f.Save(settings.SaveOptions{BackupDir: filepath.Join(dir, "backups")}); !errors.Is(err, settings.ErrChangedSinceLoad) {
+			t.Fatalf("Save err = %v, want settings.ErrChangedSinceLoad", err)
 		}
 		if got := read(t, p); got != changed {
 			t.Fatalf("file was written:\n%s", got)
@@ -715,8 +689,8 @@ func TestSaveRefusesIfChangedSinceLoad(t *testing.T) {
 			t.Fatal(err)
 		}
 		f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
-		if _, _, err := f.Save(o); !errors.Is(err, ErrChangedSinceLoad) {
-			t.Fatalf("Save err = %v, want ErrChangedSinceLoad", err)
+		if _, _, err := f.Save(o); !errors.Is(err, settings.ErrChangedSinceLoad) {
+			t.Fatalf("Save err = %v, want settings.ErrChangedSinceLoad", err)
 		}
 		if _, err := os.Lstat(p); !os.IsNotExist(err) {
 			t.Fatalf("file was written: %v", err)
@@ -733,7 +707,7 @@ func TestSaveRefusesDanglingSymlink(t *testing.T) {
 	}
 	f := load(t, link)
 	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
-	if _, _, err := f.Save(SaveOptions{BackupDir: filepath.Join(dir, "backups")}); err == nil {
+	if _, _, err := f.Save(settings.SaveOptions{BackupDir: filepath.Join(dir, "backups")}); err == nil {
 		t.Fatal("Save through a dangling symlink succeeded")
 	}
 	st, err := os.Lstat(link)
@@ -784,7 +758,7 @@ func TestRemoveAllOwnedByPrefix(t *testing.T) {
 
 // ownedOf returns the owned entries of t as event/matcher/command strings,
 // sorted.
-func ownedOf(f *File, t hooktypes.Type) []string {
+func ownedOf(f *settings.File, t hooktypes.Type) []string {
 	var out []string
 	for _, e := range f.Hooks() {
 		if e.Owned && e.Parsed.Type == t {
@@ -841,5 +815,38 @@ func TestSharedEventsStaySeparate(t *testing.T) {
 	save(t, f, o)
 	if got := read(t, p); got != userSettings {
 		t.Fatalf("not back to the original:\n%s", got)
+	}
+}
+
+// Entries tagged for another agent belong to that agent: Claude's settings
+// code never counts, replaces or removes them.
+func TestOtherAgentEntriesAreNotOwned(t *testing.T) {
+	kimi := hooktypes.CommandPrefix + "--agent kimi stop --sound Glass --focus"
+	content := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"` + kimi + `"}]}]}}`
+	p, o := setup(t, content)
+	f := load(t, p)
+	for _, e := range f.Hooks() {
+		if e.Owned {
+			t.Fatalf("kimi entry counted as owned: %+v", e)
+		}
+	}
+	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+	if n := f.RemoveAllOwned(); n != 3 {
+		t.Fatalf("RemoveAllOwned removed %d, want Claude's 3", n)
+	}
+	save(t, f, o)
+	if !strings.Contains(read(t, p), kimi) {
+		t.Fatalf("kimi entry removed:\n%s", read(t, p))
+	}
+	for cmd, want := range map[string]bool{
+		hooktypes.CommandPrefix + "stop --sound Glass --focus": true,
+		hooktypes.CommandPrefix + "--agent claude revisit":     true,
+		hooktypes.CommandPrefix + "some-future-sub":            true,
+		kimi:                             false,
+		"~/.claude/hooks/notify-done.sh": false,
+	} {
+		if got := settings.Owns(cmd); got != want {
+			t.Errorf("Owns(%q) = %v, want %v", cmd, got, want)
+		}
 	}
 }

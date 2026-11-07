@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/agent/claude"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/hooktypes"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/paths"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/perms"
@@ -86,7 +87,7 @@ func emptyStore() *state.Store {
 
 func setOwned(t *testing.T, f *settings.File, typ hooktypes.Type, a hooktypes.Answers) {
 	t.Helper()
-	es := hooktypes.Entries(typ, a)
+	es := claude.Entries(typ, a)
 	if es == nil {
 		t.Fatalf("no entries for %s %+v", typ, a)
 	}

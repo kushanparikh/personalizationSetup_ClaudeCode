@@ -549,10 +549,10 @@ func TestApplyRejectsUnknownAnswerKeys(t *testing.T) {
 	}
 }
 
-// TestServeLinesGolden runs the real `pcs serve`, sends one event of each
-// kind through the real client, and compares what serve printed, plus the
-// line a second serve prints, with the golden the Rust tests also parse.
-func TestServeLinesGolden(t *testing.T) {
+// startServe runs the real `pcs serve` in a fresh home and returns a
+// function that reads its next stdout line.
+func startServe(t *testing.T) (*env, func() string) {
+	t.Helper()
 	home, err := os.MkdirTemp("", "pcs") // short: unix socket paths are limited
 	if err != nil {
 		t.Fatal(err)
@@ -595,6 +595,15 @@ func TestServeLinesGolden(t *testing.T) {
 		}
 		return ""
 	}
+	return e, next
+}
+
+// TestServeLinesGolden runs the real `pcs serve`, sends one event of each
+// kind through the real client, and compares what serve printed, plus the
+// line a second serve prints, with the golden the Rust tests also parse.
+func TestServeLinesGolden(t *testing.T) {
+	e, next := startServe(t)
+	home := e.home
 
 	got := []string{next()} // ready
 	c := &ipc.Client{Socket: filepath.Join(home, ".pcs", "run", "app.sock"), DialTimeout: time.Second}
@@ -653,5 +662,41 @@ func TestCmdPermUsesRegistry(t *testing.T) {
 	}
 	if asked != 1 {
 		t.Errorf("request ran for a non-askable permission")
+	}
+}
+
+// TestHookAgentFlag checks `pcs hook --agent`: absent and "claude" go
+// through the Claude adapter, an unknown agent sends nothing and exits 0.
+func TestHookAgentFlag(t *testing.T) {
+	e, next := startServe(t)
+	next() // ready
+	payload := func(cause string) string {
+		return `{"session_id":"s1","hook_event_name":"` + cause + `"}`
+	}
+	for _, args := range [][]string{
+		{"hook", "--agent", "nope", "moved-on"},
+		{"hook", "--agent=nope", "moved-on"},
+		{"hook", "--agent"},
+		{"hook", "--agent="},
+	} {
+		if out, code := e.run(payload("Nope"), args...); code != 0 || out != "" {
+			t.Fatalf("%v: exit %d, stdout %q", args, code, out)
+		}
+	}
+	for _, c := range []struct {
+		cause string
+		args  []string
+	}{
+		{"UserPromptSubmit", []string{"hook", "moved-on"}},
+		{"PostToolUse", []string{"hook", "--agent", "claude", "moved-on"}},
+		{"Stop", []string{"hook", "--agent=claude", "moved-on"}},
+	} {
+		if _, code := e.run(payload(c.cause), c.args...); code != 0 {
+			t.Fatalf("%v: exit %d", c.args, code)
+		}
+		want := `{"v":1,"kind":"moved_on","sessionId":"claude:s1","focus":false,"cause":"` + c.cause + `"}`
+		if got := next(); got != want {
+			t.Fatalf("%v:\n got %s\nwant %s", c.args, got, want)
+		}
 	}
 }

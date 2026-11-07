@@ -12,7 +12,10 @@ import (
 	"log/slog"
 	"os"
 	"runtime/debug"
+	"strings"
 
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/agent"
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/agent/claude"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/hookrun"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/logx"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/paths"
@@ -36,6 +39,15 @@ var commands = map[string]command{
 	"uninstall":        cmdUninstall,
 }
 
+// adapters are the agents `pcs hook --agent <name>` accepts.
+var adapters = map[string]agent.Adapter{
+	claude.Name: claude.Adapter{},
+}
+
+// defaultAgent is used when --agent is absent, so hook entries written
+// before adapters existed keep working.
+const defaultAgent = claude.Name
+
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "hook" {
 		runHook(os.Args[2:])
@@ -43,7 +55,8 @@ func main() {
 	os.Exit(run(os.Args[1:]))
 }
 
-// runHook handles `pcs hook <sub>`. It always exits 0, even if setup panics.
+// runHook handles `pcs hook [--agent <name>] <sub>`. It always exits 0, even
+// if setup panics.
 func runHook(args []string) {
 	defer func() {
 		_ = recover()
@@ -53,11 +66,33 @@ func runHook(args []string) {
 		return
 	}
 	slog.SetDefault(logx.Open())
+	name, args := agentFlag(args)
+	ad, ok := adapters[name]
+	if !ok {
+		slog.Default().Warn("unknown agent", "agent", name)
+		return
+	}
 	sub := ""
 	if len(args) > 0 {
 		sub, args = args[0], args[1:]
 	}
-	hookrun.Run(sub, args, os.Stdin, os.Stdout, hookrun.DefaultDeps())
+	hookrun.Run(ad, sub, args, os.Stdin, os.Stdout, hookrun.DefaultDeps())
+}
+
+// agentFlag takes a leading `--agent <name>` or `--agent=<name>` off args.
+func agentFlag(args []string) (string, []string) {
+	if len(args) > 0 {
+		if v, ok := strings.CutPrefix(args[0], "--agent="); ok {
+			return v, args[1:]
+		}
+		if args[0] == "--agent" {
+			if len(args) < 2 {
+				return "", nil // no name: an unknown agent
+			}
+			return args[1], args[2:]
+		}
+	}
+	return defaultAgent, args
 }
 
 func run(args []string) (code int) {

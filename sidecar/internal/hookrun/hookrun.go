@@ -1,5 +1,6 @@
-// Package hookrun implements the `pcs hook <sub>` handlers. They never block
-// Claude Code: every path returns exit code 0.
+// Package hookrun implements the `pcs hook <sub>` handlers. An agent adapter
+// turns the payload into a canonical event; the handlers never block the
+// agent: every path returns exit code 0.
 package hookrun
 
 import (
@@ -10,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/agent"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/gitstatus"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/hooktypes"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/ipc"
@@ -17,18 +19,9 @@ import (
 )
 
 const (
-	maxStdin      = 1 << 20
-	maxMessage    = 1000
-	defaultPrompt = "Claude needs your input"
+	maxStdin   = 1 << 20
+	maxMessage = 1000
 )
-
-// Input is the subset of Claude Code's hook JSON that the handlers use.
-type Input struct {
-	SessionID string `json:"session_id"`
-	Cwd       string `json:"cwd"`
-	Event     string `json:"hook_event_name"`
-	Message   string `json:"message"`
-}
 
 // Deps are the side-effecting collaborators, injectable for tests.
 type Deps struct {
@@ -50,8 +43,9 @@ func DefaultDeps() Deps {
 	}
 }
 
-// Run executes one hook subcommand and always returns 0.
-func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (code int) {
+// Run executes one hook subcommand for the agent behind ad and always
+// returns 0.
+func Run(ad agent.Adapter, sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (code int) {
 	var log *slog.Logger
 	if d.Log == nil {
 		log = slog.New(slog.NewTextHandler(io.Discard, nil))
@@ -65,20 +59,19 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 		}
 	}()
 
-	var in Input
-	if data, err := io.ReadAll(io.LimitReader(stdin, maxStdin)); err == nil {
-		if err := json.Unmarshal(data, &in); err != nil {
-			in = Input{}
-		}
+	data, err := io.ReadAll(io.LimitReader(stdin, maxStdin))
+	if err != nil {
+		data = nil
 	}
+	in := ad.Parse(sub, data)
 	getenv := d.Getenv
 	if getenv == nil {
 		getenv = func(string) string { return "" }
 	}
 	a := hooktypes.ParseArgs(sub, args)
 
-	switch sub {
-	case "session-start":
+	switch in.Event {
+	case agent.SessionStart:
 		line, err := d.Git(in.Cwd, a.UntrackedDirty)
 		if err != nil {
 			log.Warn("git summary failed", "err", err)
@@ -89,41 +82,43 @@ func Run(sub string, args []string, stdin io.Reader, stdout io.Writer, d Deps) (
 		if err := enc.Encode(map[string]string{"systemMessage": line}); err != nil {
 			log.Warn("write failed", "err", err)
 		}
-	case "stop":
+	case agent.TaskDone:
 		e := ipc.Event{V: 1, Kind: ipc.KindToast, Title: title(in, getenv), Message: "Finished working", Tone: ipc.ToneDone,
-			Sound: sound(a.Sound), Focus: a.ClickToFocus, SessionID: in.SessionID}
+			Sound: sound(a.Sound), Focus: a.ClickToFocus, SessionID: agent.Key(in.Agent, in.SessionID)}
 		if a.ClickToFocus {
 			e.TTY = d.TTY()
 			e.BundleID = proc.TerminalBundleID(getenv)
 		}
 		send(d, log, e, true)
-	case "notification":
+	case agent.NeedsInput:
 		msg := in.Message
 		if msg == "" {
-			msg = defaultPrompt
+			msg = in.AgentName + " needs your input"
 		}
 		if r := []rune(msg); len(r) > maxMessage {
 			msg = string(r[:maxMessage])
 		}
 		e := ipc.Event{V: 1, Kind: ipc.KindPanel, Title: title(in, getenv), Message: msg, Tone: ipc.ToneWait,
-			Sound: sound(a.Sound), Focus: a.ClickToFocus, SessionID: in.SessionID}
+			Sound: sound(a.Sound), Focus: a.ClickToFocus}
 		if a.ClickToFocus {
 			e.TTY = d.TTY()
 			e.BundleID = proc.TerminalBundleID(getenv)
 		}
-		if e.SessionID == "" {
-			e.SessionID = e.TTY
+		id := in.SessionID
+		if id == "" {
+			id = e.TTY
 		}
-		if e.SessionID == "" {
-			e.SessionID = "unknown"
+		if id == "" {
+			id = "unknown"
 		}
+		e.SessionID = agent.Key(in.Agent, id)
 		send(d, log, e, true)
-	case "moved-on", "revisit":
+	case agent.MovedOn, agent.SessionEnd:
 		id := in.SessionID
 		if id == "" {
 			id = "unknown"
 		}
-		send(d, log, ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: id, Cause: cause(in.Event)}, false)
+		send(d, log, ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: agent.Key(in.Agent, id), Cause: cause(in.Cause)}, false)
 	default:
 		log.Warn("unknown hook subcommand", "sub", sub)
 	}
@@ -195,7 +190,8 @@ func sound(s string) string {
 	return s
 }
 
-func title(in Input, getenv func(string) string) string {
+// title is "<agent display name> — <folder>".
+func title(in agent.Event, getenv func(string) string) string {
 	p := ""
 	if in.Cwd != "" {
 		p = filepath.Base(in.Cwd)
@@ -205,5 +201,5 @@ func title(in Input, getenv func(string) string) string {
 	if p == "" {
 		p = "unknown"
 	}
-	return "Claude Code — " + p
+	return in.AgentName + " — " + p
 }

@@ -1,5 +1,6 @@
-// Package hooktypes is the registry of the v1 Claude Code hook types and the
-// exact hook commands written into settings.json.
+// Package hooktypes is the registry of the v1 hook types, their answers, and
+// the `pcs hook` command grammar. Which agent events run those commands is
+// each agent adapter's business (see internal/agent).
 package hooktypes
 
 import (
@@ -23,8 +24,6 @@ const (
 // CommandPrefix marks a settings.json hook command as owned by the app.
 const CommandPrefix = paths.LauncherCommand + " hook "
 
-const inputNeededMatcher = "permission_prompt|elicitation_dialog"
-
 // Sounds are the allowed sound names; "none" is also valid and means silent.
 var Sounds = []string{"Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"}
 
@@ -35,7 +34,7 @@ type Answers struct {
 	ClickToFocus   bool   `json:"clickToFocus"`
 }
 
-// Entry is one hook entry to write into settings.json.
+// Entry is one hook entry to write into an agent's config.
 type Entry struct {
 	Event, Matcher, Command string
 	Timeout                 int
@@ -123,51 +122,10 @@ func Needs(t Type, a Answers) []perms.ID {
 	return need
 }
 
-func soundFocusArgs(a Answers) string {
-	focus := "--no-focus"
-	if a.ClickToFocus {
-		focus = "--focus"
-	}
-	return " --sound " + a.Sound + " " + focus
-}
-
-// Entries returns the settings.json hook entries for the type. Commands are
-// built only from validated enum values; invalid answers yield nil.
-func Entries(t Type, a Answers) []Entry {
-	if Validate(t, a) != nil {
-		return nil
-	}
-	switch t {
-	case GitStatus:
-		cmd := CommandPrefix + "session-start"
-		if !a.UntrackedDirty {
-			cmd += " --untracked-clean"
-		}
-		return []Entry{{"SessionStart", "", cmd, 10}}
-	case Finished:
-		// revisit clears the session's finished light when the user goes
-		// back to it. It is not moved-on, so the two types never own the
-		// same command.
-		revisit := CommandPrefix + "revisit"
-		return []Entry{
-			{"Stop", "", CommandPrefix + "stop" + soundFocusArgs(a), 10},
-			{"UserPromptSubmit", "", revisit, 5},
-			{"SessionEnd", "", revisit, 5},
-		}
-	case InputNeeded:
-		moved := CommandPrefix + "moved-on"
-		return []Entry{
-			{"Notification", inputNeededMatcher, CommandPrefix + "notification" + soundFocusArgs(a), 10},
-			{"UserPromptSubmit", "", moved, 5},
-			{"PostToolUse", "", moved, 5},
-			{"Stop", "", moved, 5},
-		}
-	}
-	return nil
-}
-
 // Parsed is the result of recognising an app-owned hook command.
 type Parsed struct {
+	// Agent is the --agent value before the subcommand; "" when absent.
+	Agent   string
 	Type    Type
 	Sub     string
 	Answers Answers
@@ -177,13 +135,14 @@ type Parsed struct {
 // moved-on and revisit entries carry none.
 func (p Parsed) CarriesAnswers() bool { return p.Sub != "moved-on" && p.Sub != "revisit" }
 
-// ParseCommand recognises an app-owned hook command.
+// ParseCommand recognises an app-owned hook command, with an optional
+// `--agent <name>` before the subcommand.
 func ParseCommand(cmd string) (Parsed, bool) {
 	rest, ok := strings.CutPrefix(cmd, CommandPrefix)
 	if !ok {
 		return Parsed{}, false
 	}
-	fields := strings.Fields(rest)
+	agent, fields := cutAgent(strings.Fields(rest))
 	if len(fields) == 0 {
 		return Parsed{}, false
 	}
@@ -199,7 +158,32 @@ func ParseCommand(cmd string) (Parsed, bool) {
 	default:
 		return Parsed{}, false
 	}
-	return Parsed{Type: t, Sub: sub, Answers: ParseArgs(sub, fields[1:])}, true
+	return Parsed{Agent: agent, Type: t, Sub: sub, Answers: ParseArgs(sub, fields[1:])}, true
+}
+
+// CommandAgent returns the --agent value of an app-owned hook command ("" when
+// absent). ok is false when cmd isn't app-owned. Unlike ParseCommand it
+// doesn't need a known subcommand.
+func CommandAgent(cmd string) (agent string, ok bool) {
+	rest, ok := strings.CutPrefix(cmd, CommandPrefix)
+	if !ok {
+		return "", false
+	}
+	agent, _ = cutAgent(strings.Fields(rest))
+	return agent, true
+}
+
+// cutAgent takes a leading `--agent <name>` or `--agent=<name>` off fields.
+func cutAgent(fields []string) (string, []string) {
+	if len(fields) > 0 {
+		if v, ok := strings.CutPrefix(fields[0], "--agent="); ok {
+			return v, fields[1:]
+		}
+		if fields[0] == "--agent" && len(fields) > 1 {
+			return fields[1], fields[2:]
+		}
+	}
+	return "", fields
 }
 
 // ParseArgs reads a hook subcommand's flags. Unknown flags are ignored and
