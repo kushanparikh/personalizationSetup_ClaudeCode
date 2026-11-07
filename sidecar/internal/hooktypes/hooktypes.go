@@ -1,5 +1,6 @@
-// Package hooktypes is the registry of the v1 Claude Code hook types and the
-// exact hook commands written into settings.json.
+// Package hooktypes is the registry of the v1 hook types, their answers, and
+// the `pcs hook` command grammar. Which agent events run those commands is
+// each agent adapter's business (see internal/agent).
 package hooktypes
 
 import (
@@ -23,8 +24,6 @@ const (
 // CommandPrefix marks a settings.json hook command as owned by the app.
 const CommandPrefix = paths.LauncherCommand + " hook "
 
-const inputNeededMatcher = "permission_prompt|elicitation_dialog"
-
 // Sounds are the allowed sound names; "none" is also valid and means silent.
 var Sounds = []string{"Basso", "Blow", "Bottle", "Frog", "Funk", "Glass", "Hero", "Morse", "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink"}
 
@@ -35,7 +34,7 @@ type Answers struct {
 	ClickToFocus   bool   `json:"clickToFocus"`
 }
 
-// Entry is one hook entry to write into settings.json.
+// Entry is one hook entry to write into an agent's config.
 type Entry struct {
 	Event, Matcher, Command string
 	Timeout                 int
@@ -121,49 +120,6 @@ func Needs(t Type, a Answers) []perms.ID {
 		}
 	}
 	return need
-}
-
-func soundFocusArgs(a Answers) string {
-	focus := "--no-focus"
-	if a.ClickToFocus {
-		focus = "--focus"
-	}
-	return " --sound " + a.Sound + " " + focus
-}
-
-// Entries returns the settings.json hook entries for the type. Commands are
-// built only from validated enum values; invalid answers yield nil.
-func Entries(t Type, a Answers) []Entry {
-	if Validate(t, a) != nil {
-		return nil
-	}
-	switch t {
-	case GitStatus:
-		cmd := CommandPrefix + "session-start"
-		if !a.UntrackedDirty {
-			cmd += " --untracked-clean"
-		}
-		return []Entry{{"SessionStart", "", cmd, 10}}
-	case Finished:
-		// revisit clears the session's finished light when the user goes
-		// back to it. It is not moved-on, so the two types never own the
-		// same command.
-		revisit := CommandPrefix + "revisit"
-		return []Entry{
-			{"Stop", "", CommandPrefix + "stop" + soundFocusArgs(a), 10},
-			{"UserPromptSubmit", "", revisit, 5},
-			{"SessionEnd", "", revisit, 5},
-		}
-	case InputNeeded:
-		moved := CommandPrefix + "moved-on"
-		return []Entry{
-			{"Notification", inputNeededMatcher, CommandPrefix + "notification" + soundFocusArgs(a), 10},
-			{"UserPromptSubmit", "", moved, 5},
-			{"PostToolUse", "", moved, 5},
-			{"Stop", "", moved, 5},
-		}
-	}
-	return nil
 }
 
 // Parsed is the result of recognising an app-owned hook command.

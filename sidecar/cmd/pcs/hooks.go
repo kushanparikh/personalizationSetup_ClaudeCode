@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/agent/claude"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/hooktypes"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/launcher"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/paths"
@@ -113,7 +114,7 @@ func setHook(d hooktypes.Def, a hooktypes.Answers) error {
 	if err != nil {
 		return err
 	}
-	es := hooktypes.Entries(d.Type, a)
+	es := claude.Entries(d.Type, a)
 	f.SetOwned(d.Type, es)
 	if !ownedMatch(f, d.Type, es) { // SetOwned refused a malformed shape
 		return fmt.Errorf(`~/.claude/settings.json has a "hooks" section this app can't safely edit, so %s wasn't added. Nothing was changed.`, d.Name)
