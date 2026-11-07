@@ -151,3 +151,28 @@ func TestNeedsAreRegistered(t *testing.T) {
 		}
 	}
 }
+
+func TestParseCommandAgentFlag(t *testing.T) {
+	cases := []struct {
+		cmd, agent, sub string
+	}{
+		{"~/.pcs/bin/pcs-hook hook stop --sound Glass --focus", "", "stop"},
+		{"~/.pcs/bin/pcs-hook hook --agent kimi stop --sound Glass --focus", "kimi", "stop"},
+		{"~/.pcs/bin/pcs-hook hook --agent=claude moved-on", "claude", "moved-on"},
+	}
+	for _, c := range cases {
+		p, ok := ParseCommand(c.cmd)
+		if !ok || p.Agent != c.agent || p.Sub != c.sub {
+			t.Errorf("%q: %+v ok=%v", c.cmd, p, ok)
+		}
+	}
+	p, _ := ParseCommand("~/.pcs/bin/pcs-hook hook --agent kimi stop --sound Hero --no-focus")
+	if p.Answers != (Answers{Sound: "Hero"}) {
+		t.Errorf("answers after --agent: %+v", p.Answers)
+	}
+	for _, bad := range []string{"~/.pcs/bin/pcs-hook hook --agent", "~/.pcs/bin/pcs-hook hook --agent kimi"} {
+		if _, ok := ParseCommand(bad); ok {
+			t.Errorf("%q parsed", bad)
+		}
+	}
+}

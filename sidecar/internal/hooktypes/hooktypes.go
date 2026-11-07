@@ -124,6 +124,8 @@ func Needs(t Type, a Answers) []perms.ID {
 
 // Parsed is the result of recognising an app-owned hook command.
 type Parsed struct {
+	// Agent is the --agent value before the subcommand; "" when absent.
+	Agent   string
 	Type    Type
 	Sub     string
 	Answers Answers
@@ -133,13 +135,22 @@ type Parsed struct {
 // moved-on and revisit entries carry none.
 func (p Parsed) CarriesAnswers() bool { return p.Sub != "moved-on" && p.Sub != "revisit" }
 
-// ParseCommand recognises an app-owned hook command.
+// ParseCommand recognises an app-owned hook command, with an optional
+// `--agent <name>` before the subcommand.
 func ParseCommand(cmd string) (Parsed, bool) {
 	rest, ok := strings.CutPrefix(cmd, CommandPrefix)
 	if !ok {
 		return Parsed{}, false
 	}
 	fields := strings.Fields(rest)
+	agent := ""
+	if len(fields) > 0 {
+		if v, ok := strings.CutPrefix(fields[0], "--agent="); ok {
+			agent, fields = v, fields[1:]
+		} else if fields[0] == "--agent" && len(fields) > 1 {
+			agent, fields = fields[1], fields[2:]
+		}
+	}
 	if len(fields) == 0 {
 		return Parsed{}, false
 	}
@@ -155,7 +166,7 @@ func ParseCommand(cmd string) (Parsed, bool) {
 	default:
 		return Parsed{}, false
 	}
-	return Parsed{Type: t, Sub: sub, Answers: ParseArgs(sub, fields[1:])}, true
+	return Parsed{Agent: agent, Type: t, Sub: sub, Answers: ParseArgs(sub, fields[1:])}, true
 }
 
 // ParseArgs reads a hook subcommand's flags. Unknown flags are ignored and
