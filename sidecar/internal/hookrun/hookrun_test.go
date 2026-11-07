@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/agent/claude"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/ipc"
 )
 
@@ -42,7 +43,7 @@ func (r *rec) deps(env map[string]string) Deps {
 func run(t *testing.T, sub string, args []string, in string, d Deps) string {
 	t.Helper()
 	var out bytes.Buffer
-	if code := Run(sub, args, strings.NewReader(in), &out, d); code != 0 {
+	if code := Run(claude.Adapter{}, sub, args, strings.NewReader(in), &out, d); code != 0 {
 		t.Fatalf("exit %d", code)
 	}
 	return out.String()
@@ -71,7 +72,7 @@ func TestStopToast(t *testing.T) {
 	run(t, "stop", []string{"--sound", "Glass", "--focus"}, `{"session_id":"s7","cwd":"/x/My Project"}`,
 		r.deps(map[string]string{"__CFBundleIdentifier": "com.apple.Terminal", "TERM_PROGRAM": "Apple_Terminal"}))
 	want := ipc.Event{V: 1, Kind: ipc.KindToast, Title: "Claude Code — My Project", Message: "Finished working", Tone: ipc.ToneDone,
-		Sound: "Glass", Focus: true, TTY: "/dev/ttys009", BundleID: "com.apple.Terminal", SessionID: "s7"}
+		Sound: "Glass", Focus: true, TTY: "/dev/ttys009", BundleID: "com.apple.Terminal", SessionID: "claude:s7"}
 	if len(r.events) != 1 || !r.launches[0] {
 		t.Fatalf("events %v launches %v", r.events, r.launches)
 	}
@@ -103,7 +104,7 @@ func TestNotificationPanel(t *testing.T) {
 	run(t, "notification", []string{"--sound", "Ping", "--focus"},
 		`{"session_id":"s1","cwd":"/x/p","message":"hello"}`, r.deps(nil))
 	e := r.events[0]
-	if e.Kind != ipc.KindPanel || e.Message == "" || e.Message != "hello" || e.SessionID != "s1" || e.Tone != ipc.ToneWait || !r.launches[0] || e.Sound != "Ping" {
+	if e.Kind != ipc.KindPanel || e.Message == "" || e.Message != "hello" || e.SessionID != "claude:s1" || e.Tone != ipc.ToneWait || !r.launches[0] || e.Sound != "Ping" {
 		t.Fatalf("%+v", e)
 	}
 }
@@ -116,13 +117,13 @@ func TestHookBadInput(t *testing.T) {
 		if e.Message != "Claude needs your input" || e.Title != "Claude Code — proj" {
 			t.Fatalf("%+v", e)
 		}
-		if e.SessionID != "/dev/ttys009" {
+		if e.SessionID != "claude:/dev/ttys009" {
 			t.Fatalf("session %q", e.SessionID)
 		}
 	}
 	r := &rec{}
 	run(t, "notification", []string{"--no-focus"}, "", r.deps(nil))
-	if r.events[0].SessionID != "unknown" || r.events[0].Title != "Claude Code — unknown" {
+	if r.events[0].SessionID != "claude:unknown" || r.events[0].Title != "Claude Code — unknown" {
 		t.Fatalf("%+v", r.events[0])
 	}
 	r = &rec{}
@@ -140,7 +141,7 @@ func TestMovedOnNeverLaunches(t *testing.T) {
 		t.Fatalf("launch=%v tty=%d", r.launches, r.ttyCalls)
 	}
 	e := r.events[0]
-	if e.Kind != ipc.KindMovedOn || e.SessionID != "s1" || e.Cause != "UserPromptSubmit" || e.Tone != "" || e.V != 1 {
+	if e.Kind != ipc.KindMovedOn || e.SessionID != "claude:s1" || e.Cause != "UserPromptSubmit" || e.Tone != "" || e.V != 1 {
 		t.Fatalf("%+v", e)
 	}
 }
@@ -153,7 +154,7 @@ func TestMovedOnCarriesStopCause(t *testing.T) {
 	}
 	r = &rec{}
 	run(t, "moved-on", nil, `{}`, r.deps(nil))
-	if e := r.events[0]; e.SessionID != "unknown" || e.Cause != "" {
+	if e := r.events[0]; e.SessionID != "claude:unknown" || e.Cause != "" {
 		t.Fatalf("%+v", e)
 	}
 	r = &rec{}
@@ -170,7 +171,7 @@ func TestRevisitIsMovedOn(t *testing.T) {
 		if len(r.events) != 1 || r.launches[0] || r.ttyCalls != 0 || r.gitCalls != 0 {
 			t.Fatalf("%s: events=%v launch=%v tty=%d", ev, r.events, r.launches, r.ttyCalls)
 		}
-		want := ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: "s1", Cause: ev}
+		want := ipc.Event{V: 1, Kind: ipc.KindMovedOn, SessionID: "claude:s1", Cause: ev}
 		if r.events[0] != want {
 			t.Fatalf("%s: got %+v want %+v", ev, r.events[0], want)
 		}
