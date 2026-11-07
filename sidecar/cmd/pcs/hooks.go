@@ -8,8 +8,6 @@ import (
 	"io"
 	"log/slog"
 	"os"
-	"path/filepath"
-	"slices"
 	"strings"
 
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/agent/claude"
@@ -83,19 +81,6 @@ func saveState(st *state.Store) {
 	}
 }
 
-func saveSettings(f *settings.File, o settings.SaveOptions, what string) (string, error) {
-	backup, changed, err := f.Save(o)
-	if err != nil {
-		return "", err
-	}
-	if !changed {
-		slog.Default().Info("settings unchanged", "path", f.Path, "change", what)
-		return backup, nil
-	}
-	slog.Default().Info("settings written", "path", f.Path, "change", what, "backup", backup)
-	return backup, nil
-}
-
 // buildReport reads everything fresh and checks the Automation permission.
 func buildReport() report.Report {
 	f, err := settings.Load(paths.SettingsPath())
@@ -110,33 +95,7 @@ func buildReport() report.Report {
 
 // setHook writes the owned entries of d's type with answers a.
 func setHook(d hooktypes.Def, a hooktypes.Answers) error {
-	f, err := settings.Load(paths.SettingsPath())
-	if err != nil {
-		return err
-	}
-	es := claude.Entries(d.Type, a)
-	f.SetOwned(d.Type, es)
-	if !ownedMatch(f, d.Type, es) { // SetOwned refused a malformed shape
-		return fmt.Errorf(`~/.claude/settings.json has a "hooks" section this app can't safely edit, so %s wasn't added. Nothing was changed.`, d.Name)
-	}
-	_, err = saveSettings(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "set "+string(d.Type))
-	return err
-}
-
-// ownedMatch reports whether f's owned entries of type t are exactly es.
-func ownedMatch(f *settings.File, t hooktypes.Type, es []hooktypes.Entry) bool {
-	var have, want []string
-	for _, e := range f.Hooks() {
-		if e.Owned && e.Parsed.Type == t {
-			have = append(have, e.Event+"\x00"+e.Matcher+"\x00"+e.Command)
-		}
-	}
-	for _, e := range es {
-		want = append(want, e.Event+"\x00"+e.Matcher+"\x00"+e.Command)
-	}
-	slices.Sort(have)
-	slices.Sort(want)
-	return len(want) > 0 && slices.Equal(have, want)
+	return claude.Adapter{}.Install(claude.Entries(d.Type, a))
 }
 
 func cmdState(args []string) (any, error) {
@@ -231,7 +190,7 @@ func cmdDisable(args []string) (any, error) {
 		st.Hooks[d.Type] = a // keep the answers so enable restores them
 		saveState(st)
 		f.RemoveOwned(d.Type)
-		if _, err := saveSettings(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "disable "+string(d.Type)); err != nil {
+		if _, err := claude.Save(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "disable "+string(d.Type)); err != nil {
 			return nil, err
 		}
 	}
@@ -251,7 +210,7 @@ func cmdRemove(args []string) (any, error) {
 		return nil, err
 	}
 	if f.RemoveOwned(d.Type) > 0 {
-		if _, err := saveSettings(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "remove "+string(d.Type)); err != nil {
+		if _, err := claude.Save(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "remove "+string(d.Type)); err != nil {
 			return nil, err
 		}
 	}
@@ -272,17 +231,9 @@ func cmdUninstall(args []string) (any, error) {
 	if !*yes {
 		return nil, errors.New("uninstall removes the app's hooks and data; run it with --yes to confirm")
 	}
-	f, err := settings.Load(paths.SettingsPath())
+	n, backup, err := claude.Adapter{}.Uninstall()
 	if err != nil {
 		return nil, err
-	}
-	n := f.RemoveAllOwned()
-	backup := ""
-	if n > 0 {
-		o := settings.SaveOptions{BackupDir: filepath.Dir(paths.SettingsPath()), Keep: 1}
-		if backup, err = saveSettings(f, o, "uninstall"); err != nil {
-			return nil, err
-		}
 	}
 	slog.Default().Info("uninstall: removing app data", "removedHooks", n, "pcsDir", paths.PCSDir(), "logDir", paths.LogDir())
 	for _, dir := range []string{paths.PCSDir(), paths.LogDir()} {
