@@ -18,26 +18,26 @@ func TestEntriesExact(t *testing.T) {
 		want []Entry
 	}{
 		{"git default", GitStatus, Answers{UntrackedDirty: true},
-			[]Entry{{"SessionStart", "", p + "session-start", 10}}},
+			[]Entry{{Event: "SessionStart", Matcher: "", Command: p + "session-start", Timeout: 10}}},
 		{"git clean", GitStatus, Answers{UntrackedDirty: false},
-			[]Entry{{"SessionStart", "", p + "session-start --untracked-clean", 10}}},
+			[]Entry{{Event: "SessionStart", Matcher: "", Command: p + "session-start --untracked-clean", Timeout: 10}}},
 		{"finished default", Finished, Answers{Sound: "Glass", ClickToFocus: true},
 			[]Entry{
-				{"Stop", "", p + "stop --sound Glass --focus", 10},
-				{"UserPromptSubmit", "", p + "revisit", 5},
-				{"SessionEnd", "", p + "revisit", 5},
+				{Event: "Stop", Matcher: "", Command: p + "stop --sound Glass --focus", Timeout: 10},
+				{Event: "UserPromptSubmit", Matcher: "", Command: p + "revisit", Timeout: 5},
+				{Event: "SessionEnd", Matcher: "", Command: p + "revisit", Timeout: 5},
 			}},
 		{"finished none", Finished, Answers{Sound: "none", ClickToFocus: false},
 			[]Entry{
-				{"Stop", "", p + "stop --sound none --no-focus", 10},
-				{"UserPromptSubmit", "", p + "revisit", 5},
-				{"SessionEnd", "", p + "revisit", 5},
+				{Event: "Stop", Matcher: "", Command: p + "stop --sound none --no-focus", Timeout: 10},
+				{Event: "UserPromptSubmit", Matcher: "", Command: p + "revisit", Timeout: 5},
+				{Event: "SessionEnd", Matcher: "", Command: p + "revisit", Timeout: 5},
 			}},
 		{"input default", InputNeeded, Answers{Sound: "Ping", ClickToFocus: true}, []Entry{
-			{"Notification", "permission_prompt|elicitation_dialog", p + "notification --sound Ping --focus", 10},
-			{"UserPromptSubmit", "", p + "moved-on", 5},
-			{"PostToolUse", "", p + "moved-on", 5},
-			{"Stop", "", p + "moved-on", 5},
+			{Event: "Notification", Matcher: "permission_prompt|elicitation_dialog", Command: p + "notification --sound Ping --focus", Timeout: 10},
+			{Event: "UserPromptSubmit", Matcher: "", Command: p + "moved-on", Timeout: 5},
+			{Event: "PostToolUse", Matcher: "", Command: p + "moved-on", Timeout: 5},
+			{Event: "Stop", Matcher: "", Command: p + "moved-on", Timeout: 5},
 		}},
 	}
 	for _, c := range cases {

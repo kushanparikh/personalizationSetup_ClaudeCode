@@ -25,24 +25,24 @@ func Entries(t hooktypes.Type, a hooktypes.Answers) []hooktypes.Entry {
 		if !a.UntrackedDirty {
 			cmd += " --untracked-clean"
 		}
-		return []hooktypes.Entry{{"SessionStart", "", cmd, 10}}
+		return []hooktypes.Entry{{Event: "SessionStart", Matcher: "", Command: cmd, Timeout: 10}}
 	case hooktypes.Finished:
 		// revisit clears the session's finished light when the user goes
 		// back to it. It is not moved-on, so the two types never own the
 		// same command.
 		revisit := hooktypes.CommandPrefix + "revisit"
 		return []hooktypes.Entry{
-			{"Stop", "", hooktypes.CommandPrefix + "stop" + soundFocusArgs(a), 10},
-			{"UserPromptSubmit", "", revisit, 5},
-			{"SessionEnd", "", revisit, 5},
+			{Event: "Stop", Matcher: "", Command: hooktypes.CommandPrefix + "stop" + soundFocusArgs(a), Timeout: 10},
+			{Event: "UserPromptSubmit", Matcher: "", Command: revisit, Timeout: 5},
+			{Event: "SessionEnd", Matcher: "", Command: revisit, Timeout: 5},
 		}
 	case hooktypes.InputNeeded:
 		moved := hooktypes.CommandPrefix + "moved-on"
 		return []hooktypes.Entry{
-			{"Notification", inputNeededMatcher, hooktypes.CommandPrefix + "notification" + soundFocusArgs(a), 10},
-			{"UserPromptSubmit", "", moved, 5},
-			{"PostToolUse", "", moved, 5},
-			{"Stop", "", moved, 5},
+			{Event: "Notification", Matcher: inputNeededMatcher, Command: hooktypes.CommandPrefix + "notification" + soundFocusArgs(a), Timeout: 10},
+			{Event: "UserPromptSubmit", Matcher: "", Command: moved, Timeout: 5},
+			{Event: "PostToolUse", Matcher: "", Command: moved, Timeout: 5},
+			{Event: "Stop", Matcher: "", Command: moved, Timeout: 5},
 		}
 	}
 	return nil
