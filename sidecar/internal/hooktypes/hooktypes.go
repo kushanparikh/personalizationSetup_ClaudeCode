@@ -142,15 +142,7 @@ func ParseCommand(cmd string) (Parsed, bool) {
 	if !ok {
 		return Parsed{}, false
 	}
-	fields := strings.Fields(rest)
-	agent := ""
-	if len(fields) > 0 {
-		if v, ok := strings.CutPrefix(fields[0], "--agent="); ok {
-			agent, fields = v, fields[1:]
-		} else if fields[0] == "--agent" && len(fields) > 1 {
-			agent, fields = fields[1], fields[2:]
-		}
-	}
+	agent, fields := cutAgent(strings.Fields(rest))
 	if len(fields) == 0 {
 		return Parsed{}, false
 	}
@@ -167,6 +159,31 @@ func ParseCommand(cmd string) (Parsed, bool) {
 		return Parsed{}, false
 	}
 	return Parsed{Agent: agent, Type: t, Sub: sub, Answers: ParseArgs(sub, fields[1:])}, true
+}
+
+// CommandAgent returns the --agent value of an app-owned hook command ("" when
+// absent). ok is false when cmd isn't app-owned. Unlike ParseCommand it
+// doesn't need a known subcommand.
+func CommandAgent(cmd string) (agent string, ok bool) {
+	rest, ok := strings.CutPrefix(cmd, CommandPrefix)
+	if !ok {
+		return "", false
+	}
+	agent, _ = cutAgent(strings.Fields(rest))
+	return agent, true
+}
+
+// cutAgent takes a leading `--agent <name>` or `--agent=<name>` off fields.
+func cutAgent(fields []string) (string, []string) {
+	if len(fields) > 0 {
+		if v, ok := strings.CutPrefix(fields[0], "--agent="); ok {
+			return v, fields[1:]
+		}
+		if fields[0] == "--agent" && len(fields) > 1 {
+			return fields[1], fields[2:]
+		}
+	}
+	return "", fields
 }
 
 // ParseArgs reads a hook subcommand's flags. Unknown flags are ignored and

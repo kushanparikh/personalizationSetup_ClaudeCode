@@ -11,10 +11,11 @@ import (
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/agent"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/hooktypes"
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/paths"
+	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/settings"
 )
 
 // Name is the adapter's id, used by `pcs hook --agent` and in session keys.
-const Name = "claude"
+const Name = settings.Agent
 
 const defaultPrompt = "Claude needs your input"
 
@@ -81,6 +82,6 @@ func (a Adapter) Parse(sub string, data []byte) agent.Event {
 // Owns reports whether command is one of this app's Claude hook commands.
 // Commands without --agent predate adapters and are Claude's.
 func (Adapter) Owns(command string) bool {
-	p, ok := hooktypes.ParseCommand(command)
-	return ok && (p.Agent == "" || p.Agent == Name)
+	_, ok := hooktypes.ParseCommand(command)
+	return ok && settings.Owns(command)
 }

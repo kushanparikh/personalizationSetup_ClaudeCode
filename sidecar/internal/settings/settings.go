@@ -14,7 +14,6 @@ import (
 	"regexp"
 	"slices"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/kushanparikh/personalizationSetup_ClaudeCode/sidecar/internal/hooktypes"
@@ -106,13 +105,32 @@ func commandOf(inner any) (string, bool) {
 	return c, ok
 }
 
+// Agent is the adapter whose hook entries settings.json holds.
+const Agent = "claude"
+
+// Owns reports whether cmd is an app-owned command for Claude Code: it has
+// the app's prefix, and no --agent or --agent claude. It doesn't need a
+// known subcommand, so entries of a type this version doesn't know count.
+func Owns(cmd string) bool {
+	a, ok := hooktypes.CommandAgent(cmd)
+	return ok && (a == "" || a == Agent)
+}
+
+// parseOwned parses cmd if it is an app-owned Claude command.
+func parseOwned(cmd string) (hooktypes.Parsed, bool) {
+	if !Owns(cmd) {
+		return hooktypes.Parsed{}, false
+	}
+	return hooktypes.ParseCommand(cmd)
+}
+
 // owned reports whether inner is an app-owned entry, and parses it.
 func owned(inner any) (hooktypes.Parsed, bool) {
 	c, ok := commandOf(inner)
 	if !ok {
 		return hooktypes.Parsed{}, false
 	}
-	return hooktypes.ParseCommand(c)
+	return parseOwned(c)
 }
 
 // hooksObj returns the root "hooks" object. ok is false if hooks exists but
@@ -221,7 +239,7 @@ func (f *File) remove(match func(cmd string) bool, keep map[string]bool) int {
 
 func ofType(t hooktypes.Type) func(string) bool {
 	return func(c string) bool {
-		p, ok := hooktypes.ParseCommand(c)
+		p, ok := parseOwned(c)
 		return ok && p.Type == t
 	}
 }
@@ -232,10 +250,10 @@ func (f *File) RemoveOwned(t hooktypes.Type) int {
 }
 
 // RemoveAllOwned removes every app-owned entry and returns how many. It
-// matches on the ownership prefix alone, so entries written by a newer
-// version with a type this one doesn't know are removed too.
+// matches on Owns, so entries written by a newer version with a type this
+// one doesn't know are removed too.
 func (f *File) RemoveAllOwned() int {
-	return f.remove(func(c string) bool { return strings.HasPrefix(c, hooktypes.CommandPrefix) }, nil)
+	return f.remove(Owns, nil)
 }
 
 // SetOwned replaces the app's entries of type t with es, one new matcher
@@ -250,7 +268,7 @@ func (f *File) SetOwned(t hooktypes.Type, es []hooktypes.Entry) {
 	var add []hooktypes.Entry
 	keep := map[string]bool{}
 	for _, e := range es {
-		if p, ok := hooktypes.ParseCommand(e.Command); !ok || p.Type != t {
+		if p, ok := parseOwned(e.Command); !ok || p.Type != t {
 			continue
 		}
 		if h != nil {

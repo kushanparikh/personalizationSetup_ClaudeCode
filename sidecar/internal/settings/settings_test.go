@@ -817,3 +817,36 @@ func TestSharedEventsStaySeparate(t *testing.T) {
 		t.Fatalf("not back to the original:\n%s", got)
 	}
 }
+
+// Entries tagged for another agent belong to that agent: Claude's settings
+// code never counts, replaces or removes them.
+func TestOtherAgentEntriesAreNotOwned(t *testing.T) {
+	kimi := hooktypes.CommandPrefix + "--agent kimi stop --sound Glass --focus"
+	content := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"` + kimi + `"}]}]}}`
+	p, o := setup(t, content)
+	f := load(t, p)
+	for _, e := range f.Hooks() {
+		if e.Owned {
+			t.Fatalf("kimi entry counted as owned: %+v", e)
+		}
+	}
+	f.SetOwned(hooktypes.Finished, entries(t, hooktypes.Finished, finishedDefault))
+	if n := f.RemoveAllOwned(); n != 3 {
+		t.Fatalf("RemoveAllOwned removed %d, want Claude's 3", n)
+	}
+	save(t, f, o)
+	if !strings.Contains(read(t, p), kimi) {
+		t.Fatalf("kimi entry removed:\n%s", read(t, p))
+	}
+	for cmd, want := range map[string]bool{
+		hooktypes.CommandPrefix + "stop --sound Glass --focus": true,
+		hooktypes.CommandPrefix + "--agent claude revisit":     true,
+		hooktypes.CommandPrefix + "some-future-sub":            true,
+		kimi:                             false,
+		"~/.claude/hooks/notify-done.sh": false,
+	} {
+		if got := settings.Owns(cmd); got != want {
+			t.Errorf("Owns(%q) = %v, want %v", cmd, got, want)
+		}
+	}
+}
