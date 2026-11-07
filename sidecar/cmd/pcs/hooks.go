@@ -189,8 +189,7 @@ func cmdDisable(args []string) (any, error) {
 	if a, enabled := report.CurrentAnswers(f, st, d.Type); enabled {
 		st.Hooks[d.Type] = a // keep the answers so enable restores them
 		saveState(st)
-		f.RemoveOwned(d.Type)
-		if _, err := claude.Save(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "disable "+string(d.Type)); err != nil {
+		if _, err := (claude.Adapter{}).Remove(d.Type); err != nil {
 			return nil, err
 		}
 	}
@@ -205,14 +204,8 @@ func cmdRemove(args []string) (any, error) {
 	if err := ensureLauncher(); err != nil {
 		return nil, err
 	}
-	f, err := settings.Load(paths.SettingsPath())
-	if err != nil {
+	if _, err := (claude.Adapter{}).Remove(d.Type); err != nil {
 		return nil, err
-	}
-	if f.RemoveOwned(d.Type) > 0 {
-		if _, err := claude.Save(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "remove "+string(d.Type)); err != nil {
-			return nil, err
-		}
 	}
 	st := loadState()
 	if _, ok := st.Hooks[d.Type]; ok {

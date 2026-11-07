@@ -85,7 +85,10 @@ func agentFlag(args []string) (string, []string) {
 		if v, ok := strings.CutPrefix(args[0], "--agent="); ok {
 			return v, args[1:]
 		}
-		if args[0] == "--agent" && len(args) > 1 {
+		if args[0] == "--agent" {
+			if len(args) < 2 {
+				return "", nil // no name: an unknown agent
+			}
 			return args[1], args[2:]
 		}
 	}

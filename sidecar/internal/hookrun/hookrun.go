@@ -92,6 +92,9 @@ func Run(ad agent.Adapter, sub string, args []string, stdin io.Reader, stdout io
 		send(d, log, e, true)
 	case agent.NeedsInput:
 		msg := in.Message
+		if msg == "" {
+			msg = in.AgentName + " needs your input"
+		}
 		if r := []rune(msg); len(r) > maxMessage {
 			msg = string(r[:maxMessage])
 		}

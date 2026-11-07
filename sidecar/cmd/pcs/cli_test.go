@@ -676,6 +676,8 @@ func TestHookAgentFlag(t *testing.T) {
 	for _, args := range [][]string{
 		{"hook", "--agent", "nope", "moved-on"},
 		{"hook", "--agent=nope", "moved-on"},
+		{"hook", "--agent"},
+		{"hook", "--agent="},
 	} {
 		if out, code := e.run(payload("Nope"), args...); code != 0 || out != "" {
 			t.Fatalf("%v: exit %d, stdout %q", args, code, out)

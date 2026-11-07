@@ -31,8 +31,23 @@ func (Adapter) Install(entries []hooktypes.Entry) error {
 		d, _ := hooktypes.Get(t)
 		return fmt.Errorf(`~/.claude/settings.json has a "hooks" section this app can't safely edit, so %s wasn't added. Nothing was changed.`, d.Name)
 	}
-	_, err = Save(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "set "+string(t))
+	_, err = save(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "set "+string(t))
 	return err
+}
+
+// Remove removes the owned entries of hook type t and reports how many.
+func (Adapter) Remove(t hooktypes.Type) (int, error) {
+	f, err := settings.Load(paths.SettingsPath())
+	if err != nil {
+		return 0, err
+	}
+	n := f.RemoveOwned(t)
+	if n > 0 {
+		if _, err := save(f, settings.SaveOptions{BackupDir: paths.BackupDir(), Keep: 5}, "remove "+string(t)); err != nil {
+			return 0, err
+		}
+	}
+	return n, nil
 }
 
 // Uninstall removes every owned entry. The one backup sits next to
@@ -45,15 +60,15 @@ func (Adapter) Uninstall() (removed int, backup string, err error) {
 	n := f.RemoveAllOwned()
 	if n > 0 {
 		o := settings.SaveOptions{BackupDir: filepath.Dir(paths.SettingsPath()), Keep: 1}
-		if backup, err = Save(f, o, "uninstall"); err != nil {
+		if backup, err = save(f, o, "uninstall"); err != nil {
 			return 0, "", err
 		}
 	}
 	return n, backup, nil
 }
 
-// Save writes f and logs what changed.
-func Save(f *settings.File, o settings.SaveOptions, what string) (string, error) {
+// save writes f and logs what changed.
+func save(f *settings.File, o settings.SaveOptions, what string) (string, error) {
 	backup, changed, err := f.Save(o)
 	if err != nil {
 		return "", err

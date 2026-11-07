@@ -47,6 +47,8 @@ type Adapter interface {
 	// Install writes the entries of one hook type into the agent's config,
 	// replacing that type's previous entries.
 	Install(entries []hooktypes.Entry) error
+	// Remove deletes this app's entries of hook type t and reports how many.
+	Remove(t hooktypes.Type) (int, error)
 	// Uninstall removes every entry this app added and reports how many,
 	// plus the backup path ("" when nothing changed).
 	Uninstall() (removed int, backup string, err error)

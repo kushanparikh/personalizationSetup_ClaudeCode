@@ -21,9 +21,10 @@ func (fakeAdapter) Detect() agent.Detection { return agent.Detection{} }
 func (fakeAdapter) Capabilities() []string {
 	return []string{agent.TaskDone, agent.NeedsInput, agent.MovedOn}
 }
-func (fakeAdapter) Install([]hooktypes.Entry) error { return nil }
-func (fakeAdapter) Uninstall() (int, string, error) { return 0, "", nil }
-func (fakeAdapter) Owns(string) bool                { return false }
+func (fakeAdapter) Install([]hooktypes.Entry) error    { return nil }
+func (fakeAdapter) Remove(hooktypes.Type) (int, error) { return 0, nil }
+func (fakeAdapter) Uninstall() (int, string, error)    { return 0, "", nil }
+func (fakeAdapter) Owns(string) bool                   { return false }
 func (f fakeAdapter) Parse(sub string, data []byte) agent.Event {
 	var in struct {
 		ID      string `json:"session_id"`
@@ -98,5 +99,15 @@ func TestCrossAgentTitlesAndKeys(t *testing.T) {
 	b.apply(fire(cl, "moved-on", `{"session_id":"s1","hook_event_name":"UserPromptSubmit"}`))
 	if len(b) != 0 {
 		t.Fatalf("claude's moved_on should close claude's panel: %v", b)
+	}
+}
+
+func TestNeedsInputFallsBackToAgentName(t *testing.T) {
+	r := &rec{}
+	if code := Run(fakeAdapter{}, "notification", nil, strings.NewReader(`{"session_id":"s1"}`), &bytes.Buffer{}, r.deps(nil)); code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	if got := r.events[0].Message; got != "Fake Agent needs your input" {
+		t.Fatalf("message %q", got)
 	}
 }
